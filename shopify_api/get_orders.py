@@ -156,7 +156,7 @@ def main(data,context):
 
     result = list(rows)[0]["id"] ## last id registered in orders_master table
 
-    df = get_all_orders(2270011949127) ## 2270011949127 --> Reference id that works
+    df = get_all_orders(result) ## 2270011949127 --> Reference id that works
 
     if type(df) != type(pd.DataFrame()):
         return print("No new data to add")
@@ -216,6 +216,9 @@ def main(data,context):
         "total_tax":'float64',
         'UPDATED_FROM_API':'datetime64[ns]'
         })
+    ## Delete nan strings or empty values
+    for col in df.columns:
+        df[col] = df[col].apply(lambda x: None if x in ["nan","","None","null"] else x)
 
     today_date = date.today().strftime("%Y_%m_%d")
     file_name = f"SHOPIFY_ORDERS_{today_date}_{result}_RAW.csv"
@@ -224,7 +227,7 @@ def main(data,context):
     df.to_gbq(destination_table=table_name,
                         project_id=project_name,
                         progress_bar=False,
-                        if_exists="append") ###Change to append
+                        if_exists="append") ### should be append
 
     ## Upload to bucket
 
