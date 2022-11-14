@@ -224,7 +224,7 @@ def main(data,context):
     df.to_gbq(destination_table=table_name,
                         project_id=project_name,
                         progress_bar=False,
-                        if_exists="replace") ###Change to append
+                        if_exists="append") ###Change to append
 
     ## Upload to bucket
 
