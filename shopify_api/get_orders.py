@@ -156,7 +156,7 @@ def main(data,context):
 
     result = list(rows)[0]["id"] ## last id registered in orders_master table
 
-    df = get_all_orders(2270011949127) ## 2270011949127 --> Reference id that works
+    df = get_all_orders(result) ## 2270011949127 --> Reference id that works
 
     if type(df) != type(pd.DataFrame()):
         return print("No new data to add")
@@ -224,7 +224,7 @@ def main(data,context):
     df.to_gbq(destination_table=table_name,
                         project_id=project_name,
                         progress_bar=False,
-                        if_exists="append") ###Change to append
+                        if_exists="append") ### should be append
 
     ## Upload to bucket
 
