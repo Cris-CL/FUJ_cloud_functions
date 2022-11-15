@@ -216,6 +216,9 @@ def main(data,context):
         "total_tax":'float64',
         'UPDATED_FROM_API':'datetime64[ns]'
         })
+    ## Delete nan strings or empty values
+    for col in df.columns:
+        df[col] = df[col].apply(lambda x: None if x in ["nan","","None","null"] else x)
 
     today_date = date.today().strftime("%Y_%m_%d")
     file_name = f"SHOPIFY_ORDERS_{today_date}_{result}_RAW.csv"
