@@ -27,6 +27,7 @@ def stripe_weekly():
   start_var = last_result_timestamp
 
   ## end_time is at 23:59:59 hrs 2 days before the execution of the funciton
+  today = datetime.combine(date.today(), time())
   end_time = today - timedelta(days=2,seconds=1)
   end_var = str(int(end_time.timestamp()))
 
