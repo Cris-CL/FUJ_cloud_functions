@@ -1,6 +1,7 @@
 import json
 import os
 import stripe
+import requests
 from google.cloud import storage
 from flask import Flask, jsonify, request
 
@@ -35,10 +36,13 @@ def webhook(request):
         file_name = report_run["result"]["filename"]
         url_report = report_run["result"]["url"]
 
-        file_api_rep = os.popen(f'curl {url_report} -u {api_key_local}').read()  ## should be a string
+        file_api_rep = requests.get(url_report,auth=(api_key_local,api_key_local)).text
 
         storage_client = storage.Client()
-        bucket = storage_client.list_buckets().client.bucket('fujiorg-stripe-raw')
+        bucket_name = 'fujiorg-stripe-raw'
+        if report_run['report_type'] != "balance_change_from_activity.itemized.2":
+            bucket_name = 'fujiorg-sales-data'
+        bucket = storage_client.list_buckets().client.bucket(bucket_name)
         blob = bucket.blob(file_name)
         blob.upload_from_string(file_api_rep,content_type = 'csv')
     else:
