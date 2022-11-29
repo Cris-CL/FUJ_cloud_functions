@@ -1,6 +1,7 @@
 import json
 import os
 import stripe
+import requests
 from google.cloud import storage
 from flask import Flask, jsonify, request
 
@@ -16,7 +17,8 @@ def webhook(request):
     event = None
     payload = request.data
     sig_header = request.headers['STRIPE_SIGNATURE']
-
+    payout_bucket = os.environ.get('STRIPE_PAYOUT_BUCKET')
+    bucket_name = os.environ.get('STRIPE_BUCKET')
     try:
         event = stripe.Webhook.construct_event(
             payload, sig_header, endpoint_secret
@@ -32,15 +34,21 @@ def webhook(request):
     if event['type'] == 'reporting.report_run.succeeded':
         report_run = event['data']['object']
     # ... handle other event types
-        file_name = report_run["result"]["filename"]
+        file_name_var = report_run["result"]["filename"]
         url_report = report_run["result"]["url"]
 
-        file_api_rep = os.popen(f'curl {url_report} -u {api_key_local}').read()  ## should be a string
+        file_api_rep = requests.get(url_report,auth=(api_key_local,api_key_local)).text
 
         storage_client = storage.Client()
-        bucket = storage_client.list_buckets().client.bucket('fujiorg-stripe-raw')
+
+        if report_run['report_type'] == 'payout_reconciliation.itemized.5':
+            bucket_name = payout_bucket
+            file_name = f'PAY_{file_name_var}'
+        if report_run['report_type'] == "balance_change_from_activity.itemized.2":
+            file_name = f'BAL_{file_name_var}'
+        bucket = storage_client.list_buckets().client.bucket(bucket_name)
         blob = bucket.blob(file_name)
-        blob.upload_from_string(file_api_rep,content_type = 'csv')
+        blob.upload_from_string(file_api_rep,content_type = 'csv/txt')
     else:
       print('Unhandled event type {}'.format(event['type']))
 
