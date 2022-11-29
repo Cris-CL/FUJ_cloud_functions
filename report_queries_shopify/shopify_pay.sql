@@ -5,15 +5,34 @@ WITH shopify_filtered as (
       om.name as order_number,
       om.email as mail,
       om.lineitem_name,
-      om.lineitem_quantity,
 
-      CASE WHEN pay.source_type like '%Refund' THEN -om.lineitem_price
+      CASE WHEN (pay.source_type like '%Refund' and financial_status = 'partially_refunded') THEN 1
+      WHEN pay.source_type like '%Dispute' THEN 1
+      WHEN (pay.source_type like '%Refund' and financial_status <> 'partially_refunded') THEN om.lineitem_quantity
+      ELSE om.lineitem_quantity
+      end as lineitem_quantity,
+
+      CASE WHEN (pay.source_type like '%Refund' and financial_status = 'partially_refunded') THEN CAST(pay.amount AS FLOAT64)
+      WHEN (pay.source_type like '%Refund' and financial_status <> 'partially_refunded') THEN -om.lineitem_price
+      WHEN pay.source_type like '%Dispute' THEN CAST(pay.amount AS FLOAT64)
       ELSE om.lineitem_price
       end as lineitem_price,
 
-      om.discount_amount,
+      CASE WHEN pay.source_type like '%Refund' and financial_status = 'refunded' THEN 0
+      WHEN financial_status = 'refunded' THEN 0
+      ELSE om.discount_amount
+      end as discount_amount,
+
+
       om.lineitem_sku as sku,
-      om.shipping_shop_amount as shipping,
+
+      CASE WHEN pay.source_type like '%Refund' and financial_status = 'refunded' THEN 0
+      WHEN pay.source_type like '%Refund' and financial_status <> 'refunded' THEN 0
+      WHEN pay.source_type like '%Dispute' THEN -om.shipping_shop_amount
+      ELSE om.shipping_shop_amount
+      end as shipping,
+
+
       pay.payout_id as control_number,
 
       CASE WHEN pay.source_type like '%Refund' THEN 0
