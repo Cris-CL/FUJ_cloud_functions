@@ -1,10 +1,15 @@
+--- Improved 12-02
+--- All 2022 data is correct
 WITH shopify_filtered as (
     WITH shop_pay as
     (
       SELECT
       om.name as order_number,
       om.email as mail,
-      om.lineitem_name,
+      CASE
+      WHEN pay.source_type like '%Dispute' THEN 'Chargeback'
+      ELSE om.lineitem_name
+      END AS lineitem_name,
 
       CASE WHEN (pay.source_type like '%Refund' and financial_status = 'partially_refunded') THEN 1
       WHEN pay.source_type like '%Dispute' THEN 1
@@ -26,13 +31,13 @@ WITH shopify_filtered as (
 
       om.lineitem_sku as sku,
 
-      CASE WHEN pay.source_type like '%Refund' and financial_status = 'refunded' THEN 0
+      CASE WHEN pay.source_type like '%Refund' or financial_status = 'refunded' THEN 0
       WHEN pay.source_type like '%Refund' and financial_status <> 'refunded' THEN 0
       WHEN pay.source_type like '%Dispute' THEN -om.shipping_shop_amount
       ELSE om.shipping_shop_amount
       end as shipping,
 
-
+      om.current_total_discounts,
       pay.payout_id as control_number,
 
       CASE WHEN pay.source_type like '%Refund' THEN 0
@@ -60,7 +65,22 @@ WITH shopify_filtered as (
       lineitem_name AS product,
       payment_method
 
-    FROM shop_pay
+    FROM shop_pay where lineitem_name <> 'Chargeback'
+
+    UNION ALL
+    SELECT distinct
+    order_number,
+    control_number,
+    mail,
+    Datetime_add(order_processing_date,interval 9 HOUR) AS date_transaction,
+    ROUND((lineitem_quantity*lineitem_price)/1.08) AS subtotal,
+    lineitem_quantity*lineitem_price - ROUND((lineitem_quantity*lineitem_price)/1.08) AS tax,
+    lineitem_quantity*lineitem_price AS total,
+    lineitem_quantity AS product_count,
+    lineitem_name AS product,
+    payment_method
+
+    FROM shop_pay where lineitem_name = 'Chargeback'
 
     UNION ALL
     SELECT distinct
@@ -83,14 +103,18 @@ WITH shopify_filtered as (
       control_number,
       mail,
       Datetime_add(order_processing_date,interval 9 HOUR) AS date_transaction,
-      -ROUND(discount_amount - discount_amount/11) AS subtotal,
-      -ROUND(discount_amount/11) AS tax,
-      -discount_amount AS total,
+
+      -ROUND(current_total_discounts - current_total_discounts/11) AS subtotal,
+
+      -ROUND(current_total_discounts/11) AS tax,
+
+      -current_total_discounts astotal,
+
       1 AS product_count,
       'Discount' AS product,
       payment_method
     FROM shop_pay
-    WHERE discount_amount <> 0
+    WHERE (discount_amount <> 0 or current_total_discounts <> 0) and (discount_amount is not null or current_total_discounts is not null)
 
     UNION ALL
     SELECT distinct
@@ -169,5 +193,6 @@ date_transaction as transaction_date, ---- 決済日 column
  total as settlement_amount, ---- 決済金額 column
 
 from shopify_filtered
+-- where control_number = '76602114119'
 order by date_transaction desc,
 control_number
