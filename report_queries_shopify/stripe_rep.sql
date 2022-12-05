@@ -1,5 +1,6 @@
+---- Updated 12-05 with the payout number for the transactions
+----
 WITH shopify_filtered AS (
-
 SELECT
   name AS order_number,
   email AS mail,
@@ -82,11 +83,11 @@ CASE
   ELSE 'SOMETHING_WRONG'
 END AS balance, -- 収支区分 column
 
-null AS control_number, -- 管理番号 column
+pay.automatic_payout_id AS control_number, -- 管理番号 column
 
 FORMAT_DATE("%Y-%m-%d", date_transaction) AS accrual_date, -- 発生日 column  (FORMAT_DATE("%Y-%m-01"
 
-null AS settlement_date, -- 決済期日 column
+FORMAT_DATE("%Y-%m-%d",CAST(pay.automatic_payout_effective_at AS DATE)) AS deposit_date, -- 決済期日 column
 
 'Shopify Stripe' AS suppliers, -- 取引先 column
 
@@ -134,10 +135,20 @@ FORMAT_DATE("%Y-%m-%d", date_transaction) as date_3, ---- 決済日 column
 'Shopify' as settlement_account,  ----- 決済口座 column
 
 total as settlement_amount, ---- 決済金額 column
-(select max(processed_at) from `test-bigquery-cc.Shopify.orders_master` where payment_gateway_names = 'stripe') as LAST_UPDATED
+(select max(processed_at) from `test-bigquery-cc.Shopify.orders_master` where payment_gateway_names = 'stripe') as LAST_UPDATED,
+order_number as ORDER_NUMBER,
+mail as MAIL,
 
+from shopify_filtered AS sp
+--------- Join with payout data
+---- shopify doesnt have a reference number for stripe payments so the join is made on
+---- customer email and closest date of transaction
+LEFT JOIN `Shopify.stripe_payouts` as pay on CAST(sp.date_transaction AS DATETIME) < datetime_add(pay.created_utc,interval 9 HOUR)
+and ABS(DATETIME_DIFF(CAST(sp.date_transaction AS DATETIME) , datetime_add(pay.created_utc,interval 9 HOUR),SECOND)) <= 7
+---- 7 seconds seems to be the best threshold to match the orders between shopify and stripe
+and sp.mail = pay.customer_email
+where sp.total is not null
+---------
 
-from shopify_filtered
-where shopify_filtered.total is not null
-and CAST(date_transaction AS DATE) < (SELECT Datetime_add(max(created_utc),interval 1 day)  from`Shopify.stripe_api` )
+and CAST(date_transaction AS DATE) < (SELECT Datetime_add(max(created_utc),interval 1 day)  from`Shopify.stripe_payouts` ) -------- filter only values that are in the stripe data
 order by date_transaction desc
