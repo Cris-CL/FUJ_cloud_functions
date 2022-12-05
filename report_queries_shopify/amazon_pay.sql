@@ -26,10 +26,10 @@ st.lineitem_quantity,
 st.created_at as paid_at,
 st.email,
 st.processing_method as payment_method,
-(select max(ap.transactionposteddate) from `test-bigquery-cc.Shopify.amazon_pay`) as LAST_UPDATED
+(select max(ap.transactionposteddate) from `test-bigquery-cc.Shopify.amazon_pay_2`) as LAST_UPDATED
 
 
-FROM `test-bigquery-cc.Shopify.amazon_pay` as ap
+FROM `test-bigquery-cc.Shopify.amazon_pay_2` as ap
 LEFT JOIN `test-bigquery-cc.Shopify.orders_master`  as st on  ap.sellerorderid like concat('%',st.checkout_id,'%')
 where name is not null and transactiontype in ('Capture','Refund') ---- Only taking the Captured or refunded transactions
 
