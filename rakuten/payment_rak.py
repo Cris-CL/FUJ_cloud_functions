@@ -60,12 +60,21 @@ def upload_rak_pay(df):
     df_1.drop(columns=['number'],inplace=True)
 
     ### df small
-    df_2 = df.iloc[ini:-1].drop(columns=['決済確定日','楽天ﾍﾟｲ_決済金','決済手段','摘要']).copy()
+    df_2 = df.iloc[ini:-1].copy()
     new_col = df_2.iloc[0]
     df_2.columns = new_col
     df_2 = df_2.iloc[1:].copy()
 
     df_2.reset_index(inplace=True,drop=True)
+    print(df_2.columns)
+    df_2 = df_2.rename(columns={
+        '連番':'number',
+        '注文確認日':'order_confirmation_date',
+        '受注番号':'order_number',
+        'クーポン利用確定日':'coupon_confirmation_date',
+        'クーポン利用額':'coupon_amount',
+        'クーポン名':'coupon_name'
+    })
     new_col_2 = [
                 'number',
                 'order_number',
@@ -75,7 +84,13 @@ def upload_rak_pay(df):
                 'coupon_confirmation_date',
                 'report_id'
                 ]
-    df_2.columns = new_col_2
+
+    rep_col2 = list(df_2.columns)
+    rep_col2[-1] = "report_id"
+    df_2.columns = rep_col2
+
+    df_2 = df_2[new_col_2]
+
     df_2.drop(columns=['number'],inplace=True)
     df_2 = df_2.astype({
         'report_id':'str',
