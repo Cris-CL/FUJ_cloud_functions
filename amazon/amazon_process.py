@@ -18,12 +18,12 @@ new_bucket = os.environ.get('NEW_BUCKET')
 
 rep_classifier = {
     'tv':{
-        'destination_table':table_1,
+        'destination_table':table_2,
         'prefix':'TV',
         'folder':'transaction_view'
         },
     'oc':{
-        'destination_table':table_2,
+        'destination_table':table_1,
         'prefix':'OC',
         'folder':'order_central'
     },
@@ -141,17 +141,34 @@ def amazon_process(cloud_event):
     try:
         df = pd.read_table(uri)
         report_type = 'tv'
+        print(report_type)
     except:
         df = pd.read_table(uri,encoding="ms932")
         report_type = 'oc'
+        print(report_type)
+
 
     rep_dest = rep_classifier[report_type]
-    list_uploaded = get_list_reports(dataset,rep_dest["destination_table"])
+    try:
+        list_uploaded = get_list_reports(dataset,rep_dest["destination_table"])
+    except:
+        print("Error in the query, the file will be uploaded")
+        list_uploaded = []
 
     if name in list_uploaded:
         print(f"{name} is already on the table")
+
+        bucket_name = bucket
+        blob_name = name
+        destination_bucket_name = new_bucket
+        folder_name = f'Amazon/repeated_files'
+        new_name = f'{rep_classifier[report_type]["prefix"]}_{blob_name}'
+        destination_blob_name = f'{folder_name}/{new_name}'
+        move_blob(bucket_name, blob_name, destination_bucket_name, destination_blob_name)
+
     ## TODO process in this case (deleting old data and replace with new)
-        return
+
+        return print("finish whitout changes,file moved to repeated_files folder")
     ## Rename columns
     df.columns = df.columns.map(lambda x: x.lower().strip().replace("-","_"))
 
@@ -165,6 +182,7 @@ def amazon_process(cloud_event):
     df[['file']] = name
 
     #### UPLOAD TO BQ
+    print("Uploading start")
     table_id = f'{project}.{dataset}.{rep_classifier[report_type]["destination_table"]}'
 
     dtypes_dict = {
@@ -174,7 +192,7 @@ def amazon_process(cloud_event):
         "float64": "FLOAT",
         "datetime64[ns]": "DATETIME",
     }
-    disposition = "WRITE_APPEND"
+    disposition = "WRITE_TRUNCATE"
 
     job_config = bigquery.LoadJobConfig(
     schema=[
@@ -183,14 +201,17 @@ def amazon_process(cloud_event):
         ) for col in df.columns
     ]
     ,
-    write_disposition=disposition)
+    write_disposition=disposition,)
 
     client = bigquery.Client()
     job = client.load_table_from_dataframe(
     df, table_id, job_config=job_config)  # Make an API request.
     job.result()
+    print("Upload finished")
+
 
     #### Move the file
+    print("Moving file to processed data bucket")
 
     bucket_name = bucket
     blob_name = name
