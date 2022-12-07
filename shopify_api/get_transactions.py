@@ -57,8 +57,19 @@ def main(data, context):
     whole process from check the last payout, to make api calls until the data is updated, and save that data as a
     csv file in the bucket while uploading the same data to the orders table in BigQuery
     """
-    ## Get data
-    bigquery_client = bigquery.Client()
+    ## Delete pending of payment transactions before getting the new paid ones
+    bigquery_client_0 = bigquery.Client()
+    query_0 = f"""
+    DELETE
+    FROM `test-bigquery-cc.Shopify.{table_name}`
+    Where payout_status = 'pending
+    """
+    try:
+        query_job_0 = bigquery_client_0.query(query_0)
+        query_job_0.result()
+    except:
+        print("Couldnt remove pending transactions")
+
 
     ## query select the id correspondig to the last order in the table
     query = f"""
@@ -69,7 +80,7 @@ def main(data, context):
     try:
         query_job = bigquery_client.query(query)  # Make an API request.
         rows = query_job.result()  # Waits for query to finish
-        result = list(rows)[0]["id"]  ## last id registered in orders_master table
+        result = list(rows)[0]["id"]  ## last id registered in pay table
     except:
         print("starting from first transaction")
         result = 0
@@ -85,11 +96,16 @@ def main(data, context):
     "source_id":"str",
     "source_order_id":"str",
     "source_order_transaction_id":"str",
+
+    "amount":"float64",
+    "fee":"float64",
+    "net":"float64",
+
     "processed_at":"datetime64[ns]"
                      },)
 
     for col in df.columns:
-      df[col] = df[col].map(lambda x: None if x in ["nan", "", "None", "null"] else x)
+      df[col] = df[col].map(lambda x: None if x in ["nan", "", "None", "null","NaN","NAN"] else x)
       df[col] = df[col].apply(lambda x: x.replace(".0","") if type(x) ==type("") else x)
 
     ## Add time of creation
