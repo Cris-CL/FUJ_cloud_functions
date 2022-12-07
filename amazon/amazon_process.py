@@ -139,10 +139,10 @@ def amazon_process(cloud_event):
     ## URI from uploaded file to be loaded
     uri = f"gs://{bucket}/{name}"
     try:
-        df = pd.read_csv(uri)
+        df = pd.read_table(uri)
         report_type = 'tv'
     except:
-        df = pd.read_csv(uri,encoding="cp932")
+        df = pd.read_table(uri,encoding="ms932")
         report_type = 'oc'
 
     rep_dest = rep_classifier[report_type]
