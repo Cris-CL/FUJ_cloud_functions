@@ -15,17 +15,17 @@ project = os.environ.get('PROJECT_ID')
 new_bucket = os.environ.get('NEW_BUCKET')
 
 
-
+year = '2022'
 rep_classifier = {
     'tv':{
         'destination_table':table_2,
         'prefix':'TV',
-        'folder':'transaction_view'
+        'folder':f'transaction_view/settlement_{year}' ### Modify year when it changes
         },
     'oc':{
         'destination_table':table_1,
         'prefix':'OC',
-        'folder':'order_central'
+        'folder':f'order_central/sales_{year}' ### Modify year when it changes
     },
 }
 data_types = {
