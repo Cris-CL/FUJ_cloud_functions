@@ -17,11 +17,11 @@ password = os.environ.get("SHOPIFY_PASS")
 bucket_name = os.environ.get("BUCKET")
 project_name = os.environ.get("PROJECT_NAME")
 table_name = os.environ.get("TABLE_NAME")
-
+shop_name = os.environ.get("SHOP_NAME")
 
 def get_all_payouts(last_order_id):
     """
-    Main Function, when provided last_order_id, loops throught all the orders
+    Function that calls the api, when provided last_order_id, loops throught all the orders
     since that id, and appends them to a dataframe
     """
 
@@ -29,7 +29,6 @@ def get_all_payouts(last_order_id):
 
     limit = 250
 
-    shop_name = "fuji-organics"
     transactions = pd.DataFrame()
 
     print(f"First order_id: {last}")
@@ -57,19 +56,32 @@ def main(data, context):
     whole process from check the last payout, to make api calls until the data is updated, and save that data as a
     csv file in the bucket while uploading the same data to the orders table in BigQuery
     """
-    ## Get data
-    bigquery_client = bigquery.Client()
+    ## Delete pending of payment transactions before getting the new paid ones
+
+
+
+    query_0 = f"""DELETE FROM `test-bigquery-cc.Shopify.{table_name}` Where payout_status in ('pending','in_transit')"""
+
+    try:
+        with bigquery.Client() as BQ:
+            query_job_0 = BQ.query(query_0)
+            query_job_0.result()
+    except:
+        print("Couldnt remove pending transactions")
+
 
     ## query select the id correspondig to the last order in the table
     query = f"""
     select distinct id
-    FROM `test-bigquery-cc.Shopify.{table_name}`
-    Where id = (SELECT max(id) FROM `test-bigquery-cc.Shopify.{table_name}`)
+    FROM `{project_name}.Shopify.{table_name}`
+    Where id = (SELECT max(id) FROM `{project_name}.Shopify.{table_name}`)
     """
+
     try:
+        bigquery_client = bigquery.Client()
         query_job = bigquery_client.query(query)  # Make an API request.
         rows = query_job.result()  # Waits for query to finish
-        result = list(rows)[0]["id"]  ## last id registered in orders_master table
+        result = list(rows)[0]["id"]  ## last id registered in pay table
     except:
         print("starting from first transaction")
         result = 0
@@ -85,11 +97,16 @@ def main(data, context):
     "source_id":"str",
     "source_order_id":"str",
     "source_order_transaction_id":"str",
+
+    "amount":"float64",
+    "fee":"float64",
+    "net":"float64",
+
     "processed_at":"datetime64[ns]"
                      },)
 
     for col in df.columns:
-      df[col] = df[col].map(lambda x: None if x in ["nan", "", "None", "null"] else x)
+      df[col] = df[col].map(lambda x: None if x in ["nan", "", "None", "null","NaN","NAN"] else x)
       df[col] = df[col].apply(lambda x: x.replace(".0","") if type(x) ==type("") else x)
 
     ## Add time of creation
