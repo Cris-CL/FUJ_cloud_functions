@@ -192,7 +192,7 @@ def amazon_process(cloud_event):
         "float64": "FLOAT",
         "datetime64[ns]": "DATETIME",
     }
-    disposition = "WRITE_TRUNCATE"
+    disposition = "WRITE_APPEND"
 
     job_config = bigquery.LoadJobConfig(
     schema=[
