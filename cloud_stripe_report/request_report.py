@@ -1,3 +1,6 @@
+# google-cloud-bigquery>=3.3.5
+# stripe>=4.2.0
+
 from google.cloud import bigquery
 import stripe
 import os

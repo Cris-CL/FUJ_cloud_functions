@@ -1,3 +1,9 @@
+# functions-framework==3.*
+# pandas>=1.2.2
+# google-cloud-bigquery>=3.3.5
+# fsspec>=2022.11.0
+# gcsfs>=2022.11.0
+
 import os
 from datetime import datetime
 import time

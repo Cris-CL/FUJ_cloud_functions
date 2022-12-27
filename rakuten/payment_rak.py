@@ -66,7 +66,6 @@ def upload_rak_pay(df):
     df_2 = df_2.iloc[1:].copy()
 
     df_2.reset_index(inplace=True,drop=True)
-    print(df_2.columns)
     df_2 = df_2.rename(columns={
         '連番':'number',
         '注文確認日':'order_confirmation_date',
@@ -111,6 +110,7 @@ def update_payment(cloud_event):
 
     bucket = data["bucket"]
     name = data["name"]
+    print(name)
 
     uri = f"gs://{bucket}/{name}"
 
