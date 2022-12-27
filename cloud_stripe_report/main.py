@@ -42,7 +42,6 @@ def webhook(request):
         storage_client = storage.Client()
 
         if report_run['report_type'] == 'payout_reconciliation.itemized.5':
-            bucket_name = payout_bucket
             file_name = f'PAY_{file_name_var}'
         if report_run['report_type'] == "balance_change_from_activity.itemized.2":
             file_name = f'BAL_{file_name_var}'
