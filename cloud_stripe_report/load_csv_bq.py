@@ -1,3 +1,6 @@
+# functions-framework==3.*
+# google-cloud-bigquery>=3.3.5
+
 import os
 import functions_framework
 from google.cloud import bigquery
