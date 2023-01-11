@@ -15,7 +15,7 @@ project = os.environ.get('PROJECT_ID')
 new_bucket = os.environ.get('NEW_BUCKET')
 
 
-year = '2022'
+year = '2023' #### Changed year to current one
 rep_classifier = {
     'tv':{
         'destination_table':table_2,
@@ -70,7 +70,7 @@ data_types = {
         "sku": "str",
         "asin": "str",
         "item_status": "str",
-        "quantity": "float",
+        "quantity": "int64",
         "currency": "str",
         "item_price": "float",
         "item_tax": "float",
@@ -188,7 +188,7 @@ def amazon_process(cloud_event):
     dtypes_dict = {
 
         "object": "STRING",
-        "int64": "FLOAT",
+        "int64": "INTEGER",
         "float64": "FLOAT",
         "datetime64[ns]": "DATETIME",
     }
