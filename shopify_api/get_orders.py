@@ -283,10 +283,10 @@ def main(data, context):
         if_exists="append",
     )  ### should be append
 
-    ## Upload to bucket
+    ## Upload to bucket ### too many files so not used anymore
 
-    storage_client = storage.Client()
-    bucket = storage_client.list_buckets().client.bucket(bucket_name)
-    blob = bucket.blob(file_name)
-    blob.upload_from_string(df.to_csv(index=False), content_type="csv/txt")
+    # storage_client = storage.Client()
+    # bucket = storage_client.list_buckets().client.bucket(bucket_name)
+    # blob = bucket.blob(file_name)
+    # blob.upload_from_string(df.to_csv(index=False), content_type="csv/txt")
     return
