@@ -19,6 +19,7 @@ project_name = os.environ.get("PROJECT_NAME")
 table_name = os.environ.get("TABLE_NAME")
 shop_name = os.environ.get("SHOP_NAME")
 
+
 def get_all_payouts(last_order_id):
     """
     Function that calls the api, when provided last_order_id, loops throught all the orders
@@ -51,6 +52,7 @@ def get_all_payouts(last_order_id):
             break
     return transactions
 
+
 def main(data, context):
     """
     whole process from check the last payout, to make api calls until the data is updated, and save that data as a
@@ -58,9 +60,15 @@ def main(data, context):
     """
     ## Delete pending of payment transactions before getting the new paid ones
 
-
-
-    query_0 = f"""DELETE FROM `test-bigquery-cc.Shopify.{table_name}` Where payout_status in ('pending','in_transit')"""
+    query_0 = f"""
+    DELETE
+    FROM
+        `test-bigquery-cc.Shopify.{table_name}`
+    Where payout_id in (SELECT distinct payout_id
+                        FROM `test-bigquery-cc.Shopify.{table_name}`
+                        Where payout_status in ('pending','in_transit'))
+                        or payout_id is null
+    """
 
     try:
         with bigquery.Client() as BQ:
@@ -68,7 +76,6 @@ def main(data, context):
             query_job_0.result()
     except:
         print("Couldnt remove pending transactions")
-
 
     ## query select the id correspondig to the last order in the table
     query = f"""
@@ -92,22 +99,25 @@ def main(data, context):
     # Clean data
 
     df = df.astype(
-    {
-    "payout_id":"str",
-    "source_id":"str",
-    "source_order_id":"str",
-    "source_order_transaction_id":"str",
-
-    "amount":"float64",
-    "fee":"float64",
-    "net":"float64",
-
-    "processed_at":"datetime64[ns]"
-                     },)
+        {
+            "payout_id": "str",
+            "source_id": "str",
+            "source_order_id": "str",
+            "source_order_transaction_id": "str",
+            "amount": "float64",
+            "fee": "float64",
+            "net": "float64",
+            "processed_at": "datetime64[ns]",
+        },
+    )
 
     for col in df.columns:
-      df[col] = df[col].map(lambda x: None if x in ["nan", "", "None", "null","NaN","NAN"] else x)
-      df[col] = df[col].apply(lambda x: x.replace(".0","") if type(x) ==type("") else x)
+        df[col] = df[col].map(
+            lambda x: None if x in ["nan", "", "None", "null", "NaN", "NAN"] else x
+        )
+        df[col] = df[col].apply(
+            lambda x: x.replace(".0", "") if type(x) == type("") else x
+        )
 
     ## Add time of creation
     df["UPDATED_FROM_API"] = datetime.utcnow()
