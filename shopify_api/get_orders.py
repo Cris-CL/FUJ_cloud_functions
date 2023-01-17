@@ -171,6 +171,28 @@ def main(data, context):
     whole process from check the last order, to make api calls until the data is updated, and save that data as a
     csv file in the bucket while uploading the same data to the orders table in BigQuery
     """
+    dt = datetime.now()
+    if df.weekday() == 0:
+        ## Delete the previous 2 weeks every monday to get rid of the pending
+        with bigquery.Client() as bq_cl_tmp:
+            ################TODO Continue here
+            q_tmp = """
+                    -- deleting last 2 weeks get_orders function
+                    DELETE `test-bigquery-cc.Shopify.orders_master`
+                    Where name > (
+                        SELECT max(name)
+                        FROM `test-bigquery-cc.Shopify.orders_master`
+                        WHERE created_at < CAST(DATE_SUB(CURRENT_DATE(), INTERVAL 14 DAY) AS TIMESTAMP)
+                        -- today minus 14 days
+                        )
+                    """
+            try:
+                del_job = bq_cl_tmp.query(q_tmp)  # Make an API request.
+                del_job.result()
+            except:
+                print("Couldn'd delete the last 2 weeks orders")
+            ################TODO end new feat
+
     ## Get data
     bigquery_client = bigquery.Client()
 
@@ -273,7 +295,9 @@ def main(data, context):
     today_date = date.today().strftime("%Y_%m_%d")
     file_name = f"SHOPIFY_ORDERS_{today_date}_{result}_RAW.csv"
 
-    df["checkout_id"] = df["checkout_id"].apply(lambda x: str(int(float(x))) if type(x) == type("") else x)
+    df["checkout_id"] = df["checkout_id"].apply(
+        lambda x: str(int(float(x))) if type(x) == type("") else x
+    )
 
     ## Upload to BQ
     df.to_gbq(
@@ -282,11 +306,9 @@ def main(data, context):
         progress_bar=False,
         if_exists="append",
     )  ### should be append
-
-    ## Upload to bucket ### too many files so not used anymore
-
-    # storage_client = storage.Client()
-    # bucket = storage_client.list_buckets().client.bucket(bucket_name)
-    # blob = bucket.blob(file_name)
-    # blob.upload_from_string(df.to_csv(index=False), content_type="csv/txt")
+    if df.weekday() == 0:
+        storage_client = storage.Client()
+        bucket = storage_client.list_buckets().client.bucket(bucket_name)
+        blob = bucket.blob(file_name)
+        blob.upload_from_string(df.to_csv(index=False), content_type="csv/txt")
     return
