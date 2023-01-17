@@ -175,7 +175,7 @@ def main(data, context):
     if df.weekday() == 0:
         ## Delete the previous 2 weeks every monday to get rid of the pending
         with bigquery.Client() as bq_cl_tmp:
-            ################TODO Continue here
+
             q_tmp = """
                     -- deleting last 2 weeks get_orders function
                     DELETE `test-bigquery-cc.Shopify.orders_master`
@@ -189,9 +189,10 @@ def main(data, context):
             try:
                 del_job = bq_cl_tmp.query(q_tmp)  # Make an API request.
                 del_job.result()
-            except:
+            except Exception as err:
+                print(f"Unexpected {err=}, {type(err)=}")
                 print("Couldn'd delete the last 2 weeks orders")
-            ################TODO end new feat
+
 
     ## Get data
     bigquery_client = bigquery.Client()
@@ -206,7 +207,9 @@ def main(data, context):
         query_job = bigquery_client.query(query)  # Make an API request.
         rows = query_job.result()  # Waits for query to finish
         result = list(rows)[0]["id"]  ## last id registered in orders_master table
-    except:
+
+    except Exception as err:
+        print(f"Unexpected {err=}, {type(err)=}")
         print("starting from first order")
         result = 2270011949127
     df = get_all_orders(result)  ## 2270011949127 --> Reference id that works
