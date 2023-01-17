@@ -193,7 +193,6 @@ def main(data, context):
                 print(f"Unexpected {err=}, {type(err)=}")
                 print("Couldn'd delete the last 2 weeks orders")
 
-
     ## Get data
     bigquery_client = bigquery.Client()
 
