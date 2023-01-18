@@ -172,7 +172,7 @@ def main(data, context):
     csv file in the bucket while uploading the same data to the orders table in BigQuery
     """
     dt = datetime.now()
-    if df.weekday() == 0:
+    if dt.weekday() == 0: ##corrected df for dt
         ## Delete the previous 2 weeks every monday to get rid of the pending
         with bigquery.Client() as bq_cl_tmp:
 
@@ -308,7 +308,7 @@ def main(data, context):
         progress_bar=False,
         if_exists="append",
     )  ### should be append
-    if df.weekday() == 0:
+    if dt.weekday() == 0:
         storage_client = storage.Client()
         bucket = storage_client.list_buckets().client.bucket(bucket_name)
         blob = bucket.blob(file_name)
