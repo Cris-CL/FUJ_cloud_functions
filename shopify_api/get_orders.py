@@ -50,6 +50,7 @@ def get_all_orders(last_order_id):
             "discount-codes",
             "financial-status",
             "fulfillment-status",
+            "refunds",  ### added 18/01/23 for get the refund amounts
             # "gateway",
             "note",
             "number",
@@ -166,13 +167,32 @@ def discount_process(df):
     return df
 
 
+def refund_clean(val):
+    tmp = 0
+    for x in val:
+        if type(x) == list:
+            continue
+        elif type(x) == dict:
+            if len(x.get("refund_line_items", 0)) < 1:
+                continue
+            tmp = tmp + float(x.get("refund_line_items", 0)[0].get("subtotal", 0))
+    return tmp
+
+
+def refunds(df):
+
+    df["refund"] = df["refunds"].map(lambda x: refund_clean(x) if len(x) > 0 else 0)
+    df.drop(columns="refunds", inplace=True)
+    return df
+
+
 def main(data, context):
     """
     whole process from check the last order, to make api calls until the data is updated, and save that data as a
     csv file in the bucket while uploading the same data to the orders table in BigQuery
     """
     dt = datetime.now()
-    if dt.weekday() == 0: ##corrected df for dt
+    if dt.weekday() == 0:  ##corrected df for dt
         ## Delete the previous 2 weeks every monday to get rid of the pending
         with bigquery.Client() as bq_cl_tmp:
 
@@ -211,11 +231,15 @@ def main(data, context):
         print(f"Unexpected {err=}, {type(err)=}")
         print("starting from first order")
         result = 2270011949127
+
     df = get_all_orders(result)  ## 2270011949127 --> Reference id that works
 
     if type(df) != type(pd.DataFrame()):
         return print("No new data to add")
     # Clean data
+
+    df = refunds(df)  ## new step for the refund column
+
     df = line_map(df)
     df = discount_process(df)
     ## Add time of creation
@@ -242,6 +266,7 @@ def main(data, context):
             "email": "str",
             "financial_status": "str",
             "fulfillment_status": "str",
+            "refund": "float64",
             # 'gateway':'str',
             "name": "str",
             "note": "str",
