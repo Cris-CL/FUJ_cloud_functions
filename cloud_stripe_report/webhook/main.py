@@ -2,7 +2,6 @@ import json
 import os
 import stripe
 import requests
-from payout_report import report_request
 from google.cloud import storage
 from flask import Flask, jsonify, request
 
@@ -50,10 +49,13 @@ def webhook(request):
         blob = bucket.blob(file_name)
         blob.upload_from_string(file_api_rep,content_type = 'csv/txt')
 
-    if event['type'] == 'payout.paid':
+    elif event['type'] == 'payout.paid':
+        from payout_report import report_request
         pay_event = event['data']['object']
-        end_time = pay_event['created']
-        report_request(end_time)
+        payout_id = pay_event['id']
+        report_request(payout_id)
+        print(f"Payout {payout_id} requested")
+        return jsonify(success=True)
 
     else:
       print('Unhandled event type {}'.format(event['type']))
