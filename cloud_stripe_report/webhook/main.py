@@ -52,9 +52,9 @@ def webhook(request):
     elif event['type'] == 'payout.paid':
         from payout_report import report_request
         pay_event = event['data']['object']
-        payout_id = pay_event['id']
-        report_request(payout_id)
-        print(f"Payout {payout_id} requested")
+        arrival_date = pay_event['arrival_date']
+        print(f"Payout with arrival date: {arrival_date} requested")
+        report_request(arrival_date)
         return jsonify(success=True)
 
     else:
