@@ -194,6 +194,7 @@ def main(data, context):
     dt = datetime.now()
     if dt.weekday() == 0:  ##corrected df for dt
         ## Delete the previous 2 weeks every monday to get rid of the pending
+        print("cleaning pending orders")
         with bigquery.Client() as bq_cl_tmp:
 
             q_tmp = """
@@ -334,6 +335,7 @@ def main(data, context):
         if_exists="append",
     )  ### should be append
     if dt.weekday() == 0:
+        print("Saving to bucket last 2 weeks of orders")
         storage_client = storage.Client()
         bucket = storage_client.list_buckets().client.bucket(bucket_name)
         blob = bucket.blob(file_name)
