@@ -63,11 +63,14 @@ def main(data, context):
     query_0 = f"""
     DELETE
     FROM
-        `test-bigquery-cc.Shopify.{table_name}`
-    Where payout_id in (SELECT distinct payout_id
-                        FROM `test-bigquery-cc.Shopify.{table_name}`
-                        Where payout_status in ('pending','in_transit'))
-                        or payout_id is null
+        `{project_name}.Shopify.{table_name}`
+    WHERE
+    cast(id as INTEGER) >= (
+    SELECT
+        max(cast(id as INTEGER))
+    FROM `{project_name}.Shopify.{table_name}`
+    WHERE type = 'payout'
+    )
     """
 
     try:
@@ -79,9 +82,16 @@ def main(data, context):
 
     ## query select the id correspondig to the last order in the table
     query = f"""
-    select distinct id
-    FROM `{project_name}.Shopify.{table_name}`
-    Where id = (SELECT max(id) FROM `{project_name}.Shopify.{table_name}`)
+    SELECT
+    DISTINCT id
+    FROM
+    `{project_name}.Shopify.{table_name}`
+    WHERE
+    CAST(id AS INTEGER) = (
+    SELECT
+        MAX(CAST(id AS INTEGER))
+    FROM
+    `{project_name}.Shopify.{table_name}`)
     """
 
     try:
