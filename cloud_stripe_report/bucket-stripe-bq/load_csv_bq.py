@@ -5,6 +5,21 @@ import os
 import functions_framework
 from google.cloud import bigquery
 
+def upload_ama(df,dic,table_id):
+    job_config_ama = bigquery.LoadJobConfig(
+        schema=[
+            eval(
+                f"bigquery.SchemaField('{col}', bigquery.enums.SqlTypeNames.{dic[str(df[col].dtypes)]})"
+            ) for col in df.columns
+        ]
+        ,write_disposition="WRITE_APPEND",)
+    client_ama = bigquery.Client()
+    job_ama = client_ama.load_table_from_dataframe(
+    df, table_id, job_config=job_config_ama)  # Make an API request.
+    job_ama.result()
+    return
+
+
 # Triggered by a change in a storage bucket
 @functions_framework.cloud_event
 def upload_stripe_bq(cloud_event):
@@ -20,6 +35,7 @@ def upload_stripe_bq(cloud_event):
     dataset_id = os.environ.get('DATASET_ID')
     table_name_bal = os.environ.get('TABLE_ID')
     table_name_pay = os.environ.get('TABLE_ID_PAY')
+    table_name_ama = os.environ.get('TABLE_ID_AMA')
 
     if name[:3] == 'BAL':
         print("BALANCE")
@@ -86,7 +102,16 @@ def upload_stripe_bq(cloud_event):
         source_format=bigquery.SourceFormat.CSV,
         write_disposition='WRITE_APPEND',)
         table_id = f'{project_id}.{dataset_id}.{table_name_pay}'
+
     uri = f"gs://{bucket}/{name}"
+
+    if name[:3] == 'AMA':
+        from amazon_pay_txt_process import dtypes_dict, clean_txt
+        df_ama = clean_txt(uri)
+        upload_ama(df_ama,dtypes_dict,table_name_ama)
+        return
+
+
     load_job = client.load_table_from_uri(
         uri, table_id, job_config=job_config
     )  # Make an API request.
