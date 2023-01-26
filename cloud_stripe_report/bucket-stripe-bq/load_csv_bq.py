@@ -1,9 +1,37 @@
 # functions-framework==3.*
 # google-cloud-bigquery>=3.3.5
+# google-cloud-storage>=2.5.0
+# pandas==1.5.1
+# fsspec==2022.11.0
+# gcsfs==2022.11.0
+# pyarrow==9.0.0
+
 
 import os
 import functions_framework
-from google.cloud import bigquery
+from google.cloud import bigquery,storage
+
+file_classifier = {
+    'PAY':'fujiorg-sales-data/Shopify/stripe/payments/',
+    'BAL':'fujiorg-sales-data/Shopify/stripe/balance/',
+    'AMA':'fujiorg-sales-data/Shopify/amazon_pay/',
+}
+
+# def move_blob(origin_bucket_name, origin_blob_name, destination_bucket_name, destination_blob_name):
+#     """Moves a blob from one bucket to another with a new name."""
+#     from google.cloud import storage
+
+#     storage_client = storage.Client()
+
+#     source_bucket = storage_client.bucket(origin_bucket_name)
+#     source_blob = source_bucket.blob(origin_blob_name)
+#     destination_bucket = storage_client.bucket(destination_bucket_name)
+
+#     blob_copy = source_bucket.copy_blob(
+#         source_blob, destination_bucket, destination_blob_name
+#     )
+#     source_bucket.delete_blob(origin_blob_name)
+# return
 
 def upload_ama(df,dic,table_id):
     job_config_ama = bigquery.LoadJobConfig(
@@ -106,10 +134,21 @@ def upload_stripe_bq(cloud_event):
     uri = f"gs://{bucket}/{name}"
 
     if name[:3] == 'AMA':
+
         from amazon_pay_txt_process import dtypes_dict, clean_txt
         df_ama = clean_txt(uri)
-        upload_ama(df_ama,dtypes_dict,table_name_ama)
-        return
+        table_upload = f'{project_id}.{dataset_id}.{table_name_ama}'
+        upload_ama(df_ama,dtypes_dict,table_upload)
+
+
+        filename = f'Shopify/amazon_pay/{name[:-4]}.csv'
+        storage_client = storage.Client()
+        bucket = storage_client.list_buckets().client.bucket('fujiorg-sales-data')
+        blob = bucket.blob(filename)
+        blob.upload_from_string(df_ama.to_csv(index = False),content_type = 'csv')
+
+
+    return
 
 
     load_job = client.load_table_from_uri(

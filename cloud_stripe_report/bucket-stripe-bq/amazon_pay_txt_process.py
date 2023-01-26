@@ -2,6 +2,7 @@ import pandas as pd
 
 dtypes_dict = {
         "object": "STRING",
+        "string": "STRING",
         "int64": "INTEGER",
         "float64": "FLOAT",
         "datetime64[ns]": "TIMESTAMP",
