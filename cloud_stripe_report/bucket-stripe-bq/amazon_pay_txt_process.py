@@ -1,4 +1,6 @@
 import pandas as pd
+from google.cloud import bigquery
+
 
 
 
@@ -16,7 +18,7 @@ def clean_txt(file):
 
     new_pay.columns =  new_pay.iloc[0]
 
-    new_pay = new_pay.iloc[4:,:].reset_index(drop=True)
+    new_pay = new_pay.iloc[1:,:].reset_index(drop=True)
     new_pay.columns = [x.replace(",","").lower() for x in list(new_pay.columns)]
     cols = [
     "transactionamount",
@@ -61,7 +63,6 @@ def upload_ama(df,table_id):
         "datetime64[ns]": "TIMESTAMP",
         }
 
-    from google.cloud import bigquery
     job_config_ama = bigquery.LoadJobConfig(
         #### creates the schema with a list comprehension based on the data types of the df
         schema=[
