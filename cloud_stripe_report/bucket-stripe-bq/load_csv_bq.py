@@ -1,9 +1,53 @@
 # functions-framework==3.*
 # google-cloud-bigquery>=3.3.5
+# google-cloud-storage>=2.5.0
+# pandas==1.5.1
+# fsspec==2022.11.0
+# gcsfs==2022.11.0
+# pyarrow==9.0.0
+
 
 import os
 import functions_framework
-from google.cloud import bigquery
+from google.cloud import bigquery,storage
+
+file_classifier = {
+    'PAY':'fujiorg-sales-data/Shopify/stripe/payments/',
+    'BAL':'fujiorg-sales-data/Shopify/stripe/balance/',
+    'AMA':'fujiorg-sales-data/Shopify/amazon_pay/',
+}
+
+# def move_blob(origin_bucket_name, origin_blob_name, destination_bucket_name, destination_blob_name):
+#     """Moves a blob from one bucket to another with a new name."""
+#     from google.cloud import storage
+
+#     storage_client = storage.Client()
+
+#     source_bucket = storage_client.bucket(origin_bucket_name)
+#     source_blob = source_bucket.blob(origin_blob_name)
+#     destination_bucket = storage_client.bucket(destination_bucket_name)
+
+#     blob_copy = source_bucket.copy_blob(
+#         source_blob, destination_bucket, destination_blob_name
+#     )
+#     source_bucket.delete_blob(origin_blob_name)
+# return
+
+
+
+def stripe_csv_bq(uri,table_id,job_config):
+    client = bigquery.Client()
+    load_job = client.load_table_from_uri(
+        uri, table_id, job_config=job_config)  # Make an API request.
+
+    load_job.result()  # Waits for the job to complete.
+
+    destination_table = client.get_table(table_id)  # Make an API request.
+    print("Loaded {} rows.".format(destination_table.num_rows))
+    return
+
+
+
 
 # Triggered by a change in a storage bucket
 @functions_framework.cloud_event
@@ -15,15 +59,20 @@ def upload_stripe_bq(cloud_event):
 
 
 # Construct a BigQuery client object.
-    client = bigquery.Client()
+    # client = bigquery.Client()
     project_id = os.environ.get('PROJECT_ID')
     dataset_id = os.environ.get('DATASET_ID')
     table_name_bal = os.environ.get('TABLE_ID')
     table_name_pay = os.environ.get('TABLE_ID_PAY')
+    table_name_ama = os.environ.get('TABLE_ID_AMA')
+    prefix = name[:3]
 
-    if name[:3] == 'BAL':
+
+    uri = f"gs://{bucket}/{name}"
+
+    if prefix == 'BAL':
         print("BALANCE")
-        job_config = bigquery.LoadJobConfig(
+        job_config_bal = bigquery.LoadJobConfig(
         schema=[
             bigquery.SchemaField("balance_transaction_id", "STRING"),
             bigquery.SchemaField("created_utc", "DATETIME"),
@@ -48,11 +97,13 @@ def upload_stripe_bq(cloud_event):
         # The source format defaults to CSV, so the line below is optional.
         source_format=bigquery.SourceFormat.CSV,
         write_disposition='WRITE_APPEND',)
-        table_id = f'{project_id}.{dataset_id}.{table_name_bal}'
+        table_bal = f'{project_id}.{dataset_id}.{table_name_bal}'
+        stripe_csv_bq(uri,table_bal,job_config_bal)
 
-    elif name[:3] == 'PAY':
+
+    elif prefix == 'PAY':
         print("PAYOUT")
-        job_config = bigquery.LoadJobConfig(
+        job_config_pay = bigquery.LoadJobConfig(
         schema=[
             bigquery.SchemaField("automatic_payout_id", "STRING"),
             bigquery.SchemaField("automatic_payout_effective_at", "DATETIME"),
@@ -85,13 +136,24 @@ def upload_stripe_bq(cloud_event):
         # The source format defaults to CSV, so the line below is optional.
         source_format=bigquery.SourceFormat.CSV,
         write_disposition='WRITE_APPEND',)
-        table_id = f'{project_id}.{dataset_id}.{table_name_pay}'
-    uri = f"gs://{bucket}/{name}"
-    load_job = client.load_table_from_uri(
-        uri, table_id, job_config=job_config
-    )  # Make an API request.
+        table_pay = f'{project_id}.{dataset_id}.{table_name_pay}'
 
-    load_job.result()  # Waits for the job to complete.
+        stripe_csv_bq(uri,table_pay,job_config_pay)
 
-    destination_table = client.get_table(table_id)  # Make an API request.
-    print("Loaded {} rows.".format(destination_table.num_rows))
+
+    elif prefix == 'AMA':
+        from amazon_pay_txt_process import clean_txt,upload_ama
+
+        df_ama = clean_txt(uri)
+        table_upload = f'{project_id}.{dataset_id}.{table_name_ama}'
+
+        upload_ama(df_ama,table_upload)
+
+        ama_file_name = name[:-4]
+
+        filename = f'Shopify/amazon_pay/{ama_file_name}.csv'
+        storage_client = storage.Client()
+        bucket = storage_client.list_buckets().client.bucket('fujiorg-sales-data')
+        blob = bucket.blob(filename)
+        blob.upload_from_string(df_ama.to_csv(index = False),content_type = 'csv')
+        return
