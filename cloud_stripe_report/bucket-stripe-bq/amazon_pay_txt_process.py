@@ -1,12 +1,6 @@
 import pandas as pd
 
-dtypes_dict = {
-        "object": "STRING",
-        "string": "STRING",
-        "int64": "INTEGER",
-        "float64": "FLOAT",
-        "datetime64[ns]": "TIMESTAMP",
-        }
+
 
 
 def clean_txt(file):
@@ -56,3 +50,28 @@ def clean_txt(file):
     })
 
     return new_pay
+
+
+def upload_ama(df,table_id):
+    dtypes_dict = {
+        "object": "STRING",
+        "string": "STRING",
+        "int64": "INTEGER",
+        "float64": "FLOAT",
+        "datetime64[ns]": "TIMESTAMP",
+        }
+
+    from google.cloud import bigquery
+    job_config_ama = bigquery.LoadJobConfig(
+        #### creates the schema with a list comprehension based on the data types of the df
+        schema=[
+            eval(
+                f"bigquery.SchemaField('{col}', bigquery.enums.SqlTypeNames.{dtypes_dict[str(df[col].dtypes)]})"
+            ) for col in df.columns
+        ]
+        ,write_disposition="WRITE_APPEND",)
+    client_ama = bigquery.Client()
+    job_ama = client_ama.load_table_from_dataframe(
+    df, table_id, job_config=job_config_ama)  # Make an API request.
+    job_ama.result()
+    return

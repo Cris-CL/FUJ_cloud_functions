@@ -33,19 +33,20 @@ file_classifier = {
 #     source_bucket.delete_blob(origin_blob_name)
 # return
 
-def upload_ama(df,dic,table_id):
-    job_config_ama = bigquery.LoadJobConfig(
-        schema=[
-            eval(
-                f"bigquery.SchemaField('{col}', bigquery.enums.SqlTypeNames.{dic[str(df[col].dtypes)]})"
-            ) for col in df.columns
-        ]
-        ,write_disposition="WRITE_APPEND",)
-    client_ama = bigquery.Client()
-    job_ama = client_ama.load_table_from_dataframe(
-    df, table_id, job_config=job_config_ama)  # Make an API request.
-    job_ama.result()
+
+
+def stripe_csv_bq(uri,table_id,job_config):
+    client = bigquery.Client()
+    load_job = client.load_table_from_uri(
+        uri, table_id, job_config=job_config)  # Make an API request.
+
+    load_job.result()  # Waits for the job to complete.
+
+    destination_table = client.get_table(table_id)  # Make an API request.
+    print("Loaded {} rows.".format(destination_table.num_rows))
     return
+
+
 
 
 # Triggered by a change in a storage bucket
@@ -58,16 +59,20 @@ def upload_stripe_bq(cloud_event):
 
 
 # Construct a BigQuery client object.
-    client = bigquery.Client()
+    # client = bigquery.Client()
     project_id = os.environ.get('PROJECT_ID')
     dataset_id = os.environ.get('DATASET_ID')
     table_name_bal = os.environ.get('TABLE_ID')
     table_name_pay = os.environ.get('TABLE_ID_PAY')
     table_name_ama = os.environ.get('TABLE_ID_AMA')
+    prefix = name[:3]
 
-    if name[:3] == 'BAL':
+
+    uri = f"gs://{bucket}/{name}"
+
+    if prefix == 'BAL':
         print("BALANCE")
-        job_config = bigquery.LoadJobConfig(
+        job_config_bal = bigquery.LoadJobConfig(
         schema=[
             bigquery.SchemaField("balance_transaction_id", "STRING"),
             bigquery.SchemaField("created_utc", "DATETIME"),
@@ -92,11 +97,13 @@ def upload_stripe_bq(cloud_event):
         # The source format defaults to CSV, so the line below is optional.
         source_format=bigquery.SourceFormat.CSV,
         write_disposition='WRITE_APPEND',)
-        table_id = f'{project_id}.{dataset_id}.{table_name_bal}'
+        table_bal = f'{project_id}.{dataset_id}.{table_name_bal}'
+        stripe_csv_bq(uri,table_bal,job_config_bal)
 
-    elif name[:3] == 'PAY':
+
+    elif prefix == 'PAY':
         print("PAYOUT")
-        job_config = bigquery.LoadJobConfig(
+        job_config_pay = bigquery.LoadJobConfig(
         schema=[
             bigquery.SchemaField("automatic_payout_id", "STRING"),
             bigquery.SchemaField("automatic_payout_effective_at", "DATETIME"),
@@ -129,33 +136,24 @@ def upload_stripe_bq(cloud_event):
         # The source format defaults to CSV, so the line below is optional.
         source_format=bigquery.SourceFormat.CSV,
         write_disposition='WRITE_APPEND',)
-        table_id = f'{project_id}.{dataset_id}.{table_name_pay}'
+        table_pay = f'{project_id}.{dataset_id}.{table_name_pay}'
 
-    uri = f"gs://{bucket}/{name}"
+        stripe_csv_bq(uri,table_pay,job_config_pay)
 
-    if name[:3] == 'AMA':
 
-        from amazon_pay_txt_process import dtypes_dict, clean_txt
+    elif prefix == 'AMA':
+        from amazon_pay_txt_process import clean_txt,upload_ama
+
         df_ama = clean_txt(uri)
         table_upload = f'{project_id}.{dataset_id}.{table_name_ama}'
-        upload_ama(df_ama,dtypes_dict,table_upload)
 
+        upload_ama(df_ama,table_upload)
 
-        filename = f'Shopify/amazon_pay/{name[:-4]}.csv'
+        ama_file_name = name[:-4]
+
+        filename = f'Shopify/amazon_pay/{ama_file_name}.csv'
         storage_client = storage.Client()
         bucket = storage_client.list_buckets().client.bucket('fujiorg-sales-data')
         blob = bucket.blob(filename)
         blob.upload_from_string(df_ama.to_csv(index = False),content_type = 'csv')
-
-
-    return
-
-
-    load_job = client.load_table_from_uri(
-        uri, table_id, job_config=job_config
-    )  # Make an API request.
-
-    load_job.result()  # Waits for the job to complete.
-
-    destination_table = client.get_table(table_id)  # Make an API request.
-    print("Loaded {} rows.".format(destination_table.num_rows))
+        return
