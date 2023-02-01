@@ -69,7 +69,7 @@ def main(data, context):
     SELECT
         max(cast(id as INTEGER))
     FROM `{project_name}.Shopify.{table_name}`
-    WHERE type = 'payout'
+    WHERE type = 'payout' OR payout_id is null
     )
     """
 
@@ -77,6 +77,7 @@ def main(data, context):
         with bigquery.Client() as BQ:
             query_job_0 = BQ.query(query_0)
             query_job_0.result()
+        print("Removed pending transactions")
     except:
         print("Couldnt remove pending transactions")
 
