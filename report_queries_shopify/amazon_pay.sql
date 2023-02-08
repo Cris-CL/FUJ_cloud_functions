@@ -1,3 +1,4 @@
+------ current report query for amazon payments updated 01-25
 WITH amazon_pay as (
 SELECT
 st.name,
@@ -49,7 +50,8 @@ SELECT
   lineitem_quantity AS product_count,
   lineitem_name AS product,
   payment_method,
-  LAST_UPDATED
+  LAST_UPDATED,
+  sellerorderid
 
 FROM amazon_pay
 
@@ -65,7 +67,8 @@ SELECT distinct
   1 AS product_count,
   'Shipping' AS product,
   payment_method,
-  LAST_UPDATED
+  LAST_UPDATED,
+  sellerorderid
 FROM amazon_pay
 WHERE shipping >0
 
@@ -81,7 +84,8 @@ SELECT distinct
   1 AS product_count,
   'Discount' AS product,
   payment_method,
-  LAST_UPDATED
+  LAST_UPDATED,
+  sellerorderid
 FROM amazon_pay
 WHERE discount_amount <> 0 and discount_amount is not null
 
@@ -97,7 +101,8 @@ SELECT distinct
   1 AS product_count,
   'Handling Fee' AS product,
   payment_method,
-  LAST_UPDATED
+  LAST_UPDATED,
+  sellerorderid
 FROM amazon_pay
 
 order by order_number desc
@@ -165,7 +170,8 @@ FORMAT_DATE("%Y-%m-%d", date_transaction) as date_3, ---- 決済日 column
 'Shopify' as settlement_account,  ----- 決済口座 column
 
 total as settlement_amount, ---- 決済金額 column
-LAST_UPDATED
+LAST_UPDATED,
+sellerorderid
 
 -- (select string_field_1 from `Shopify.nomenclature_shopify` Where string_field_1 = product.shopify_filtered) as account,
 
