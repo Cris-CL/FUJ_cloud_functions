@@ -1,3 +1,4 @@
+---- FOR REPORTS updated 02-08 with correct deposit date in date_3
 WITH amazon_pay as (
 SELECT
 st.name,
@@ -26,7 +27,7 @@ st.lineitem_quantity,
 st.created_at as paid_at,
 st.email,
 st.processing_method as payment_method,
-(select max(ap.transactionposteddate) from `test-bigquery-cc.Shopify.amazon_pay_2`) as LAST_UPDATED
+(select max(transactionposteddate) from `test-bigquery-cc.Shopify.amazon_pay_2` as dat where dat.settlementid = ap.settlementid) as LAST_UPDATED
 
 
 FROM `test-bigquery-cc.Shopify.amazon_pay_2` as ap
@@ -160,12 +161,12 @@ END AS item, ---- 品目 column
 null as department, --- 部門 column
 null as memo_tag, ----- メモタグ（複数指定可、カンマ区切り） column
 
-FORMAT_DATE("%Y-%m-%d", date_transaction) as date_3, ---- 決済日 column
+CAST(LAST_UPDATED as DATE) as date_3, ---- 決済日 column
 
 'Shopify' as settlement_account,  ----- 決済口座 column
 
 total as settlement_amount, ---- 決済金額 column
-LAST_UPDATED
+
 
 -- (select string_field_1 from `Shopify.nomenclature_shopify` Where string_field_1 = product.shopify_filtered) as account,
 
