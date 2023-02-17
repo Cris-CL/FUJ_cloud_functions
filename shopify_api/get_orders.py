@@ -249,91 +249,102 @@ def main(data, context):
     # Change datetime using Series.dt.tz_localize() according to pandas doc
     # ref https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.astype.html
 
-    df = df.astype(
-        {
-            "id": "str",
-            "buyer_accepts_marketing": "bool",
-            "cancel_reason": "str",
-            "cancelled_at": "datetime64[ns]",
-            "cart_token": "str",
-            "checkout_id": "str",
-            "checkout_token": "str",
-            "confirmed": "str",
-            "contact_email": "str",
-            "created_at": "datetime64[ns]",
-            "current_subtotal_price": "float64",
-            "current_total_discounts": "float64",
-            "current_total_price": "float64",
-            "email": "str",
-            "financial_status": "str",
-            "fulfillment_status": "str",
-            "refund": "float64",
-            # 'gateway':'str',
-            "name": "str",
-            "note": "str",
-            "note_attributes": "str",
-            "number": "str",
-            "order_number": "str",
-            "payment_gateway_names": "str",
-            "processed_at": "datetime64[ns]",
-            "processing_method": "str",
-            "reference": "str",
-            "source_identifier": "str",
-            "source_name": "str",
-            "tags": "str",
-            "token": "str",
-            "total_outstanding": "float64",
-            "updated_at": "datetime64[ns]",
-            "shipping_shop_amount": "float64",
-            "shipping_presentment_amount": "float64",
-            "lineitem_quantity": "float64",
-            "lineitem_name": "str",
-            "lineitem_price": "float64",
-            "lineitem_sku": "str",
-            "discount_code": "str",
-            "discount_amount": "float64",
-            "discount_type": "str",
-            "subtotal_price": "float64",
-            "total_price": "float64",
-            "total_tax": "float64",
-            "UPDATED_FROM_API": "datetime64[ns]",
-            "ship_address1": "str",
-            "ship_phone": "str",
-            "ship_city": "str",
-            "ship_zip": "str",
-            "ship_province": "str",
-            "ship_country": "str",
-            "ship_first_name": "str",
-            "ship_last_name": "str",
-            "ship_address2": "str",
-            "ship_company": "str",
-            "ship_name": "str",
-            "ship_latitude": "float64",
-            "ship_longitude": "float64",
-            "ship_country_code": "str",
-            "ship_province_code": "str",
-        }
-    )
+    dict_types = {
+        "id": "str",
+        "buyer_accepts_marketing": "bool",
+        "cancel_reason": "str",
+        "cancelled_at": "datetime64[ns]",
+        "cart_token": "str",
+        "checkout_id": "str",
+        "checkout_token": "str",
+        "confirmed": "str",
+        "contact_email": "str",
+        "created_at": "datetime64[ns]",
+        "current_subtotal_price": "float64",
+        "current_total_discounts": "float64",
+        "current_total_price": "float64",
+        "email": "str",
+        "financial_status": "str",
+        "fulfillment_status": "str",
+        "refund": "float64",
+        "name": "str",
+        "note": "str",
+        "note_attributes": "str",
+        "number": "str",
+        "order_number": "str",
+        "payment_gateway_names": "str",
+        "processed_at": "datetime64[ns]",
+        "processing_method": "str",
+        "reference": "str",
+        "source_identifier": "str",
+        "source_name": "str",
+        "tags": "str",
+        "token": "str",
+        "total_outstanding": "float64",
+        "updated_at": "datetime64[ns]",
+        "shipping_shop_amount": "float64",
+        "shipping_presentment_amount": "float64",
+        "lineitem_quantity": "float64",
+        "lineitem_name": "str",
+        "lineitem_price": "float64",
+        "lineitem_sku": "str",
+        "discount_code": "str",
+        "discount_amount": "float64",
+        "discount_type": "str",
+        "subtotal_price": "float64",
+        "total_price": "float64",
+        "total_tax": "float64",
+        "UPDATED_FROM_API": "datetime64[ns]",
+        "ship_address1": "str",
+        "ship_phone": "str",
+        "ship_city": "str",
+        "ship_zip": "str",
+        "ship_province": "str",
+        "ship_country": "str",
+        "ship_first_name": "str",
+        "ship_last_name": "str",
+        "ship_address2": "str",
+        "ship_company": "str",
+        "ship_name": "str",
+        "ship_latitude": "float64",
+        "ship_longitude": "float64",
+        "ship_country_code": "str",
+        "ship_province_code": "str",
+    }
+
+    df = df.astype(dict_types)
     ## Delete nan strings or empty values
     for col in df.columns:
-        df[col] = df[col].apply(
-            lambda x: None if x in ["nan", "", "None", "null"] else x
-        )
+        df[col] = df[col].apply(lambda x: None
+                                if x in ["nan", "", "None", "null"] else x)
+        if col not in dict_types.keys():
+        ##### dropping columns that shouldnt appear
+                df.drop(
+                    columns=[col],inplace=True,
+                )
 
     today_date = date.today().strftime("%Y_%m_%d")
     file_name = f"SHOPIFY_ORDERS_{today_date}_{result}_RAW.csv"
 
-    df["checkout_id"] = df["checkout_id"].apply(
-        lambda x: str(int(float(x))) if type(x) == type("") else x
-    )
-
+    df["checkout_id"] = df["checkout_id"].apply(lambda x: str(int(float(x)))
+                                                if type(x) == type("") else x)
     ## Upload to BQ
-    df.to_gbq(
-        destination_table=table_name,
-        project_id=project_name,
-        progress_bar=False,
-        if_exists="append",
-    )  ### should be append
+    try:
+        df.to_gbq(
+            destination_table=table_name,
+            project_id=project_name,
+            progress_bar=False,
+            if_exists="append",
+        )  ### should be append
+    except Exception as e:
+        print(e)
+        print("Saving data to bucket")
+        storage_client = storage.Client()
+        bucket = storage_client.list_buckets().client.bucket(bucket_name)
+        file_name = f"SH_problem_data_{today_date}_{result}_RAW.csv"
+        blob = bucket.blob(file_name)
+        blob.upload_from_string(df.to_csv(index=False), content_type="csv/txt")
+
     if dt.weekday() == 0:
         print("Saving to bucket last 2 weeks of orders")
         storage_client = storage.Client()
