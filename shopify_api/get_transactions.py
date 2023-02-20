@@ -67,10 +67,9 @@ def main(data, context):
     WHERE
     cast(id as INTEGER) >= (
     SELECT
-        max(cast(id as INTEGER))
+        min(cast(id as INTEGER))
     FROM `{project_name}.Shopify.{table_name}`
-    WHERE type = 'payout' OR payout_id is null
-    )
+    WHERE WHERE payout_status = 'pending')
     """
 
     try:
