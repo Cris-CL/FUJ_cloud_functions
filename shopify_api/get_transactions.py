@@ -69,7 +69,7 @@ def main(data, context):
     SELECT
         min(cast(id as INTEGER))
     FROM `{project_name}.Shopify.{table_name}`
-    WHERE WHERE payout_status = 'pending')
+    WHERE payout_status = 'pending')
     """
 
     try:
