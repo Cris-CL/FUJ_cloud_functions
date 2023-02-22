@@ -263,7 +263,7 @@ def main(data, context):
         "current_subtotal_price": "float64",
         "current_total_discounts": "float64",
         "current_total_price": "float64",
-        "current_total_tax": "float64",
+        "current_total_tax": "str",
         "email": "str",
         "financial_status": "str",
         "fulfillment_status": "str",
