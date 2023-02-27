@@ -1,4 +1,5 @@
---- Improved 12-02
+--- tax on fee and sorting change 02-27
+--- Change order dates 02-08
 --- All 2022 data is correct
 WITH shopify_filtered as (
     WITH shop_pay as
@@ -8,6 +9,7 @@ WITH shopify_filtered as (
       om.email as mail,
       CASE
       WHEN pay.source_type like '%Dispute' THEN 'Chargeback'
+      WHEN pay.source_type like '%Refund' THEN CONCAT('Refund ',om.lineitem_name)
       ELSE om.lineitem_name
       END AS lineitem_name,
 
@@ -30,8 +32,11 @@ WITH shopify_filtered as (
 
 
       om.lineitem_sku as sku,
-
-      CASE WHEN pay.source_type like '%Refund' or financial_status = 'refunded' THEN 0
+------------------------------------------------- Shipping management, usually there are problems when
+------------------------------------------------- refunds happen
+      CASE
+--      WHEN pay.payout_status like '%paid' THEN om.shipping_shop_amount
+      WHEN pay.source_type like '%Refund' or financial_status = 'refunded' THEN 0
       WHEN pay.source_type like '%Refund' and financial_status <> 'refunded' THEN 0
       WHEN pay.source_type like '%Dispute' THEN -om.shipping_shop_amount
       ELSE om.shipping_shop_amount
@@ -104,12 +109,22 @@ WITH shopify_filtered as (
       mail,
       Datetime_add(order_processing_date,interval 9 HOUR) AS date_transaction,
 
-      -ROUND(current_total_discounts - current_total_discounts/11) AS subtotal,
 
-      -ROUND(current_total_discounts/11) AS tax,
+      CASE
+      WHEN lineitem_name like 'Refund%' THEN ABS(ROUND(current_total_discounts - current_total_discounts/11))
+      ELSE -ROUND(current_total_discounts - current_total_discounts/11)
+      END AS subtotal,
 
-      -current_total_discounts astotal,
 
+      CASE
+      WHEN lineitem_name like 'Refund%' THEN ABS(ROUND(current_total_discounts/11))
+      ELSE -ROUND(current_total_discounts/11)
+      END AS tax,
+
+      CASE
+      WHEN lineitem_name like 'Refund%' THEN ABS(current_total_discounts)
+      ELSE -current_total_discounts
+      END AS total,
       1 AS product_count,
       'Discount' AS product,
       payment_method
@@ -140,15 +155,14 @@ CASE
   ELSE 'SOMETHING_WRONG'
 END AS balance, -- 収支区分 column
 
-control_number, -- 管理番号 column
+CAST(control_number AS INTEGER) as control_number, -- 管理番号 column
+
+
+
+CAST(date_transaction AS DATE) as transaction_date, ---- 発生日 column
 
 ## accrual date is the date where the payment is processed accordint to the api
-(select processed_at
-FROM `test-bigquery-cc.Shopify.shopify_payouts_api`
-where
-source_type = 'payout' and payout_id = control_number) AS accrual_date, -- 発生日 column
-
-null AS settlement_date, -- 決済期日 column
+null AS accrual_date, -- 決済期日 column
 
 payment_method AS suppliers, -- 取引先 column
 
@@ -169,7 +183,10 @@ ABS(total) as amount, -- 金額  column
 
 '内税' as tax_calculation_distinction, -- 税計算区分 column
 
-ROUND(ABS(total-total/1.08)) as tax_total, ---- 税額 column
+CASE
+  WHEN product = 'Handling Fee' THEN 0
+  ELSE ROUND(ABS(total-total/1.08))
+END AS tax_total, ---- 税額 column
 
 CASE
   WHEN product = 'Shipping' THEN CONCAT('Delivery (',order_number,')')
@@ -186,13 +203,18 @@ END AS item, ---- 品目 column
 null as department, --- 部門 column
 null as memo_tag, ----- メモタグ（複数指定可、カンマ区切り） column
 
-date_transaction as transaction_date, ---- 決済日 column
+
+
+CAST( (select processed_at
+FROM `test-bigquery-cc.Shopify.shopify_payouts_api`
+where
+source_type = 'payout' and payout_id = control_number) AS DATE)AS settlement_date, -- 決済日 column
+
 
 'Shopify' as settlement_account,  ----- 決済口座 column
 
  total as settlement_amount, ---- 決済金額 column
 
 from shopify_filtered
--- where control_number = '76602114119'
-order by date_transaction desc,
-control_number
+
+order by control_number desc,date_transaction desc
