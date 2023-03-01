@@ -11,7 +11,7 @@ import random
 import functions_framework
 import pandas as pd
 from google.cloud import bigquery
-from cloud_names import columns_names_translation, dict_col
+from columns_names import columns_names_translation, dict_col
 
 
 def format_rakuten(df):
