@@ -1,6 +1,9 @@
+---- Updated 03-02, few changes on format and order of data
 ---- Updated 12-05 with the payout number for the transactions
 ----
 WITH shopify_filtered AS (
+------ START FILTERING ------
+
 SELECT
   name AS order_number,
   email AS mail,
@@ -11,7 +14,6 @@ SELECT
   lineitem_quantity AS product_count,
   lineitem_name AS product,
   processing_method,
-
 
 FROM `test-bigquery-cc.Shopify.orders_master` WHERE payment_gateway_names = 'stripe'
 
@@ -71,7 +73,8 @@ FROM `test-bigquery-cc.Shopify.orders_master`
 WHERE name in (SELECT name FROM `test-bigquery-cc.Shopify.orders_master` WHERE payment_gateway_names = 'stripe')
 
 
-order by order_number desc )
+order by order_number desc)
+------　FINISH FILTERING ------
 
 ------ ROWS: order_number ; mail ; date_transaction ; subtotal ; tax ; total ; product_count ; product ; processing_method
 
@@ -80,14 +83,14 @@ SELECT
 CASE
   WHEN total > 0 THEN '収入'
   WHEN total <= 0 THEN '支出'
-  ELSE 'SOMETHING_WRONG'
+  ELSE 'ERROR'
 END AS balance, -- 収支区分 column
 
-pay.automatic_payout_id AS control_number, -- 管理番号 column
+SUBSTR(pay.automatic_payout_id,5,20) AS control_number, -- 管理番号 column
 
 FORMAT_DATE("%Y-%m-%d", date_transaction) AS accrual_date, -- 発生日 column  (FORMAT_DATE("%Y-%m-01"
 
-FORMAT_DATE("%Y-%m-%d",CAST(pay.automatic_payout_effective_at AS DATE)) AS deposit_date, -- 決済期日 column
+null AS settlement_date, -- 決済期日 column
 
 'Shopify Stripe' AS suppliers, -- 取引先 column
 
@@ -130,19 +133,21 @@ END AS item, ---- 品目 column
 null as department, --- 部門 column
 null as memo_tag, ----- メモタグ（複数指定可、カンマ区切り） column
 
-FORMAT_DATE("%Y-%m-%d", date_transaction) as date_3, ---- 決済日 column
+FORMAT_DATE("%Y-%m-%d",CAST(pay.automatic_payout_effective_at AS DATE)) as date_3, ---- 決済日 column
 
 'Shopify' as settlement_account,  ----- 決済口座 column
 
 total as settlement_amount, ---- 決済金額 column
-(select max(processed_at) from `test-bigquery-cc.Shopify.orders_master` where payment_gateway_names = 'stripe') as LAST_UPDATED,
+(select CAST(max(processed_at) AS DATE) from `test-bigquery-cc.Shopify.orders_master` where payment_gateway_names = 'stripe') as LAST_UPDATED,
 order_number as ORDER_NUMBER,
 mail as MAIL,
 
 from shopify_filtered AS sp
+
 --------- Join with payout data
 ---- shopify doesnt have a reference number for stripe payments so the join is made on
 ---- customer email and closest date of transaction
+
 LEFT JOIN `Shopify.stripe_payouts` as pay on CAST(sp.date_transaction AS DATETIME) < datetime_add(pay.created_utc,interval 9 HOUR)
 and ABS(DATETIME_DIFF(CAST(sp.date_transaction AS DATETIME) , datetime_add(pay.created_utc,interval 9 HOUR),SECOND)) <= 7
 ---- 7 seconds seems to be the best threshold to match the orders between shopify and stripe
@@ -151,4 +156,4 @@ where sp.total is not null
 ---------
 
 and CAST(date_transaction AS DATE) < (SELECT Datetime_add(max(created_utc),interval 1 day)  from`Shopify.stripe_payouts` ) -------- filter only values that are in the stripe data
-order by date_transaction desc
+order by date_transaction desc,automatic_payout_id desc
