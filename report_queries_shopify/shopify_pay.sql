@@ -1,3 +1,4 @@
+---　tax change to verify that is 8%
 --- tax on fee and sorting change 02-27
 --- Change order dates 02-08
 --- All 2022 data is correct
@@ -176,16 +177,19 @@ CASE
                   'GoCLN シェイカー'
                   ) THEN '課税売上10%'
   WHEN product = 'Handling Fee' THEN '対象外'
-  ELSE '課税売上8%'
+  ELSE '課税売上8%（軽）' -------- CAMBIO EN EL KANJI DE 8%
 END AS tax_distinction, ----- 税区分 column
 
 ABS(total) as amount, -- 金額  column
 
 '内税' as tax_calculation_distinction, -- 税計算区分 column
-
+-------- Fixed Tax calculation
 CASE
+  WHEN product in ('Shipping',
+                  'GoCLN シェイカー'
+                  ) THEN ROUND(ABS(total*0.1))
   WHEN product = 'Handling Fee' THEN 0
-  ELSE ROUND(ABS(total-total/1.08))
+  ELSE ROUND(ABS(total*0.08))
 END AS tax_total, ---- 税額 column
 
 CASE
