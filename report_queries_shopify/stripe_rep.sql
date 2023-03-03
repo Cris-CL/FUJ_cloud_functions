@@ -1,3 +1,4 @@
+---- Updated 03-03 fix tax calc and new kanji
 ---- Updated 03-02, few changes on format and order of data
 ---- Updated 12-05 with the payout number for the transactions
 ----
@@ -104,7 +105,7 @@ CASE
                   'GoCLN シェイカー'
                   ) THEN '課税売上10%'
   WHEN product = 'Handling Fee' THEN '対象外'
-  ELSE '課税売上8%'
+  ELSE '課税売上8%（軽）' --- previous '課税売上8%'
 END AS tax_distinction, ----- 税区分 column
 
 ABS(total) as amount, -- 金額  column
@@ -112,9 +113,9 @@ ABS(total) as amount, -- 金額  column
 '内税' as tax_calculation_distinction, -- 税計算区分 column
 
 CASE
-  WHEN product in ('Shipping','GoCLN シェイカー') THEN ROUND(ABS(total-total/1.1))
+  WHEN product in ('Shipping','GoCLN シェイカー') THEN ROUND(ABS(total*0.1))
   WHEN product = 'Handling Fee' THEN 0
-  ELSE ROUND(ABS(total-total/1.08))
+  ELSE ROUND(ABS(total*0.08))
 END as tax_total, ---- 税額 column
 
 CASE
