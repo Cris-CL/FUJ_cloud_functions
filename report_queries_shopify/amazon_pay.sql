@@ -1,3 +1,4 @@
+---- UP 03-08 corrected discount when refunds
 ---- UPDATED 03-03 with new '課税売上8%（軽）' in tax and correct tax calc
 ---- FOR REPORTS updated 02-08 with correct deposit date in date_3
 WITH amazon_pay as (
@@ -77,9 +78,17 @@ SELECT distinct
   settlement_id,
   email AS mail,
   Datetime_add(paid_at,interval 9 HOUR) AS date_transaction,
-  -ROUND(discount_amount - discount_amount/11) AS subtotal,
-  -ROUND(discount_amount/11) AS tax,
-  -discount_amount AS total,
+  CASE
+    WHEN LOWER(transactiontype) = 'refund' THEN ROUND(discount_amount - discount_amount/11)
+    ELSE -ROUND(discount_amount - discount_amount/11)
+  END AS subtotal,
+  CASE
+    WHEN LOWER(transactiontype) = 'refund' THEN ROUND(discount_amount/11)
+    ELSE -ROUND(discount_amount/11)
+  END AS tax,
+  CASE WHEN LOWER(transactiontype) = 'refund' THEN discount_amount
+  ELSE -discount_amount
+  END AS total,
   1 AS product_count,
   'Discount' AS product,
   payment_method,
