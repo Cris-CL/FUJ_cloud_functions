@@ -76,6 +76,7 @@ def get_all_orders(last_order_id):
             "total-price",
             "total-tax",
             "shipping-address",
+            "total-discounts" ### Added total discounts field
         ]
     )
     print(f"First order_id: {last}")
@@ -311,6 +312,7 @@ def main(data, context):
         "ship_longitude": "float64",
         "ship_country_code": "str",
         "ship_province_code": "str",
+        "total_discounts":"float64"
     }
 
     df = df.astype(dict_types)
