@@ -1,10 +1,9 @@
-from google.cloud import bigquery
-import stripe
-import os
-from datetime import datetime, date, time,timedelta
+# from google.cloud import bigquery
+# import stripe
+# import os
+# from datetime import datetime, date, time,timedelta
 
-
-def stripe_payment_weekly():
+def payout_request():
 
     """
     Function generates a request for a report that covers from friday one week ago to saturday 2 days ago
@@ -12,11 +11,11 @@ def stripe_payment_weekly():
     """
 
     api_key_local = os.environ.get('stripe_key')
-    table_q = os.environ.get('TABLE_QUERY')
+    table_q = os.environ.get('TABLE_QUERY_PAY')
     stripe.api_key = api_key_local
 
     ## Query to get last transaction in bq
-    query =f"""SELECT max(automatic_payout_effective_at) FROM `{table_q}`""" ## ORIGINAL
+    query =f"""SELECT max(charge_created_utc) FROM `{table_q}`""" ## ORIGINAL
     client_q = bigquery.Client()
     query_job = client_q.query(query)  # Make an API request.
     rows = query_job.result()
@@ -26,8 +25,9 @@ def stripe_payment_weekly():
     start_var = last_result_timestamp
 
     ## end_time is at 23:59:59 hrs 1 day before the execution of the funciton
+
     today = datetime.combine(date.today(), time())
-    end_time = today - timedelta(days=1)
+    end_time = today - timedelta(days=1,hours=5,seconds=1)
     end_var = str(int(end_time.timestamp()))
 
     ## Type of report to create
@@ -69,5 +69,4 @@ def stripe_payment_weekly():
         ]
     },)
 
-def payout(data,context):
-  stripe_payment_weekly()
+    return
