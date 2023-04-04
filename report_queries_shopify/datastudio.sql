@@ -1,4 +1,4 @@
--------- For Datastudio dashboard updated 03-13
+-------- For Datastudio dashboard updated 04-03
 WITH
   sub_q AS ( (
     SELECT
@@ -51,7 +51,11 @@ WITH
       CAST(DATETIME_ADD(order_date_time,INTERVAL 9 HOUR) AS DATETIME) AS transaction_date,
       quantity*unit_price AS amount,
       quantity,
-      CAST(LEFT(item_number,13) AS STRING) AS sku,
+
+      CASE ----- UPATED sku
+       WHEN item_number like 'v_%' then CAST(substr(item_number, 3 ,13) AS STRING)
+       ELSE CAST(LEFT(item_number,13) AS STRING)
+      END AS sku,
 
       ---- FIX FOR THE ZIP CODE THAT IS NOT IN THE FORMAT XXX-XXXX
       CASE
