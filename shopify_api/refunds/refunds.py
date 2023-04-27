@@ -1,4 +1,4 @@
-# pandas==1.5.1
+# pandas==1.2.2
 # google-cloud-storage==1.44.0
 # google-cloud-bigquery==3.3.5
 # pandas-gbq==0.17.9
