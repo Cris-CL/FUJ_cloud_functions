@@ -18,6 +18,7 @@ shop_name = os.environ.get("SHOP_NAME")
 api_version = os.environ.get("API_VER")
 bucket_name = os.environ.get("BUCKET_NAME")
 REFUND_TABLE = os.environ.get("REFUND_TABLE")
+ORDERS_TABLE = os.environ.get("ORDERS_TABLE")
 PROJECT_ID = os.environ.get("PROJECT_ID")
 
 
@@ -63,7 +64,12 @@ def get_last_refund():
 
     with bigquery.Client() as bq_client:
         q_tmp = f"""-- getting last refunded order
-            SELECT MAX(id) FROM `{PROJECT_ID}.{REFUND_TABLE}`"""
+            SELECT distinct id FROM `{ORDERS_TABLE}`
+            WHERE name = (SELECT distinct name
+            from `{REFUND_TABLE}`
+            where id = (SELECT MAX(id)
+            FROM `{REFUND_TABLE}`))
+            """
         try:
             q_job = bq_client.query(q_tmp)  # Make an API request.
             q_job.result()
