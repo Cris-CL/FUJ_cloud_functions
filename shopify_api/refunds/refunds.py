@@ -66,8 +66,9 @@ def get_last_refund():
         q_tmp = f"""-- getting last refunded order
             SELECT distinct id FROM `{ORDERS_TABLE}`
             WHERE name = (SELECT distinct name
-            from `Shopify.refunds_master`
-            where id = (SELECT MAX(id) FROM `{PROJECT_ID}.{REFUND_TABLE}`))
+            from `{REFUND_TABLE}`
+            where id = (SELECT MAX(id)
+            FROM `{REFUND_TABLE}`))
             """
         try:
             q_job = bq_client.query(q_tmp)  # Make an API request.
