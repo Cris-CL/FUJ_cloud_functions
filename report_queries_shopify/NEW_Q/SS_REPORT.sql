@@ -1,6 +1,4 @@
----- NEW SS REPORT
----- MORE FEATURES AND CORRECTED FOR EACH PRODUCT TAX
-----
+---- scheduled SS report
 
 WITH dtim as (
 WITH shopify_filtered AS (
@@ -165,7 +163,12 @@ reporting_category,
 product,
 product_count,
 sku,
-pay.automatic_payout_id as SETT_NUMBER
+pay.automatic_payout_id as SETT_NUMBER,
+CASE -- 2991
+  WHEN pay.reporting_category <> "charge" THEN CAST(pay.created_utc as DATETIME)
+  ELSE CAST(date_transaction as DATETIME)
+END AS real_date,
+
 
 from shopify_filtered AS sp
 LEFT JOIN
