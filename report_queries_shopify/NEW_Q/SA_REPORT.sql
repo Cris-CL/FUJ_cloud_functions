@@ -1,5 +1,5 @@
--- NEW report SA
--- modif
+---- scheduled SA report
+
 WITH SA as (WITH amazon_pay as (
 SELECT
 st.name,
@@ -202,7 +202,8 @@ product,
 product_count,
 unit_price,
 sku,
-order_number
+order_number,
+date_transaction as real_date --3912
 
 from shopify_filtered
 order by order_number desc, date_transaction)
