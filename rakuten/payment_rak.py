@@ -1,5 +1,5 @@
 # functions-framework==3.*
-# pandas>=1.2.2
+# pandas==1.5.1
 # google-cloud-bigquery>=3.3.5
 # fsspec>=2022.11.0
 # gcsfs>=2022.11.0
@@ -38,68 +38,86 @@ def upload_rak_pay(df):
             div_index.append(i)
 
     ### df big
-    df_1 = df.iloc[:div_index[0]].copy()
-    df_1.columns = ['number',
-                    'order_confirmation_date',
-                    'order_number',
-                    'payment_number',
-                    'payment_institution_link_number',
-                    'onquiry_number',
-                    'payment_confirmation_date',
-                    'rakuten_pay_money',
-                    'payment_method',
-                    'summary',
-                    'report_id']
+    try:
+        df_1 = df.iloc[:div_index[0]].copy()
+        df_1.columns = ['number',
+                        'order_confirmation_date',
+                        'order_number',
+                        'payment_number',
+                        'payment_institution_link_number',
+                        'onquiry_number',
+                        'payment_confirmation_date',
+                        'rakuten_pay_money',
+                        'payment_method',
+                        'summary',
+                        'report_id']
+        for col_name in df_1.columns:
+            df_1[col_name] = df_1[col_name].map(
+                lambda x: x.replace(",","").replace(".","") if type(x) == type("") else x
+                            )
+        df_1 = df_1.astype({
+            'order_confirmation_date':'datetime64[ns]',
+            'rakuten_pay_money':'float64',
+            'payment_confirmation_date':'datetime64[ns]',
+                        })
+        df_1.reset_index(inplace=True,drop=True)
+        df_1.drop(columns=['number'],inplace=True)
+        df_1.to_gbq(destination_table=f'{dataset_id}.{table_1}',if_exists='append',progress_bar=False)
 
-    df_1 = df_1.astype({
-        'order_confirmation_date':'datetime64[ns]',
-        'rakuten_pay_money':'float64',
-        'payment_confirmation_date':'datetime64[ns]',
-                    })
-    df_1.reset_index(inplace=True,drop=True)
-    df_1.drop(columns=['number'],inplace=True)
+    except Exception as err:
+        print(f"Error {err} with type {type(err)} occurred")
+        raise TypeError("First dataframe incorrect or missing")
 
     ### df small
-    df_2 = df.iloc[ini:-1].copy()
-    new_col = df_2.iloc[0]
-    df_2.columns = new_col
-    df_2 = df_2.iloc[1:].copy()
+    try:
+        df_2 = df.iloc[ini:-1].copy()
+        new_col = df_2.iloc[0]
+        df_2.columns = new_col
+        df_2 = df_2.iloc[1:].copy()
 
-    df_2.reset_index(inplace=True,drop=True)
-    df_2 = df_2.rename(columns={
-        '連番':'number',
-        '注文確認日':'order_confirmation_date',
-        '受注番号':'order_number',
-        'クーポン利用確定日':'coupon_confirmation_date',
-        'クーポン利用額':'coupon_amount',
-        'クーポン名':'coupon_name'
-    })
-    new_col_2 = [
-                'number',
-                'order_number',
-                'order_confirmation_date',
-                'coupon_name',
-                'coupon_amount',
-                'coupon_confirmation_date',
-                'report_id'
-                ]
+        df_2.reset_index(inplace=True,drop=True)
+        df_2 = df_2.rename(columns={
+            '連番':'number',
+            '注文確認日':'order_confirmation_date',
+            '受注番号':'order_number',
+            'クーポン利用確定日':'coupon_confirmation_date',
+            'クーポン利用額':'coupon_amount',
+            'クーポン名':'coupon_name'
+        })
+        new_col_2 = [
+                    'number',
+                    'order_number',
+                    'order_confirmation_date',
+                    'coupon_name',
+                    'coupon_amount',
+                    'coupon_confirmation_date',
+                    'report_id'
+                    ]
 
-    rep_col2 = list(df_2.columns)
-    rep_col2[-1] = "report_id"
-    df_2.columns = rep_col2
+        rep_col2 = list(df_2.columns)
+        rep_col2[-1] = "report_id"
+        df_2.columns = rep_col2
 
-    df_2 = df_2[new_col_2]
+        df_2 = df_2[new_col_2]
 
-    df_2.drop(columns=['number'],inplace=True)
-    df_2 = df_2.astype({
-        'report_id':'str',
-        'coupon_amount':'float64',
-        'order_confirmation_date':'datetime64[ns]',
-        'coupon_confirmation_date':'datetime64[ns]',
-    })
+        df_2.drop(columns=['number'],inplace=True)
 
-    df_1.to_gbq(destination_table=f'{dataset_id}.{table_1}',if_exists='append',progress_bar=False)
-    df_2.to_gbq(destination_table=f'{dataset_id}.{table_2}',if_exists='append',progress_bar=False)
+        for col_name in df_2.columns:
+            df_2[col_name] = df_2[col_name].map(
+                lambda x: x.replace(",","").replace(".","") if type(x) == type("") else x
+                )
+        df_2 = df_2.astype({
+            'report_id':'str',
+            'coupon_amount':'float64',
+            'order_confirmation_date':'datetime64[ns]',
+            'coupon_confirmation_date':'datetime64[ns]',
+        })
+        df_2.to_gbq(destination_table=f'{dataset_id}.{table_2}',if_exists='append',progress_bar=False)
+    except Exception as err:
+        print(f"Error {err} with type {type(err)} occurred")
+        print("Second dataframe incorrect or missing")
+
+
 
     return 'success'
 
