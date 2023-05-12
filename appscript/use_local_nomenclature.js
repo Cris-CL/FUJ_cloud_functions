@@ -88,134 +88,153 @@ function use_local_nomenclature22() {
   const request = {
     // TODO (developer) - Replace query with yours
     query:`
-      ------ Apps Script Query
-      ------ UPDATED 03-06
-      With full_report as (
+      --- NEW AMAZON Q
+      --- sheets version
+      with sub as (
+      with tor as(
+      with tv as (
+        select
+      CAST(settlement_id AS INT64) as settlement_id,
+      DATETIME_ADD(posted_date_time, interval 9 HOUR) as posted_date_time,
+      transaction_type,
+      amount_type,
+      amount_description,
+      sum(amount) as total_amount,
+      order_id,
+      sku,
+      Case
+        When transaction_type in ('CouponRedemptionFee','Imaging Services') THEN concat(transaction_type,amount_type)
+        ELSE concat(transaction_type,amount_type,amount_description)
+      End as concat_fields,
+      sum(quantity_purchased) as total_purchased,
+      from Amazon.transaction_view_master
+      group by
+
+      settlement_id,
+      posted_date_time,
+      transaction_type,
+      order_id,
+      amount_type,
+      amount_description,
+      sku
+      )
+      SELECT
+      tv.* except(posted_date_time),
+      tv.posted_date_time,
+      oc.purchase_date,
+
+      CASE ------REFUNDS APPEAR AT THE SETTLEMENT DATE NOW
+        WHEN transaction_type = 'Refund' THEN tv.posted_date_time
+        WHEN oc.purchase_date is null THEN tv.posted_date_time
+        ELSE oc.purchase_date
+      END AS main_date,
+      CASE
+        WHEN transaction_type = 'Refund' THEN 'POSTED_DATE_REFUND'
+        WHEN oc.purchase_date is null THEN 'POSTED_DATE'
+        ELSE 'ORDER_DATE'
+      END AS DATE_TYPE
+
+      from tv
+      LEFT JOIN (SELECT DISTINCT
+      amazon_order_id,
+      DATETIME_ADD(purchase_date,INTERVAL 9 HOUR) as purchase_date
+      FROM Amazon.order_central_master) as oc
+      ON oc.amazon_order_id = tv.order_id
+
+      )
+
       SELECT
         CASE
-          WHEN sum(suma) < 0 THEN '支出'
-          WHEN sum(suma) >= 0 THEN '収入'
+          WHEN sum(total_amount) < 0 THEN '支出'
+          WHEN sum(total_amount) >= 0 THEN '収入'
         END AS balance,
-        CAST(settlement AS STRING) as settlement_id,
-        CAST(posted_date AS DATE) as purchase_or_posted_date,
-        purchase_or_posted_date as payment_date,
+        CAST(settlement_id AS STRING) as settlement_id,
+        CAST(main_date AS DATE) as main_date,
+        -- purchase_or_posted_date as payment_date,
         'Amazon Seller' as supplier,
         Case
-         when account is null then 'MISSING NOMENCLATURE'
-         ELSE account
+          when account is null then 'MISSING NOMENCLATURE'
+          ELSE account
         end as  account,
         tax_distiction,
-        abs(sum(suma)) as total_sum,
+        abs(sum(total_amount)) as total_sum,
         '内税' as tax_calc_distinction,
-        CASE WHEN remarks in ('Current Reserve Amount','Previous Reserve Amount') Then 0
-        Else ROUND(abs(sum(suma)-(sum(suma)/1.1)))
-        END AS tax_amount,
         remarks,
         item,
         null as department,
         null as memo,
+        DATE_TYPE,
+        sku,
+        total_purchased,
+        sum(total_amount) total_real,
+        order_id,
+        CAST(posted_date_time AS DATE) AS posted,
+        main_date as full_date,
         CURRENT_DATE() AS DATE_OF_QUERY
 
-      FROM (
-            SELECT distinct
-            settlement_id as settlement,
-            vm.transaction_type,
-            vm.posted_date,
+      FROM tor
+      LEFT JOIN temp_nomenclature.nomenclature_temp
+          on tor.concat_fields = concatenated_fields
+      WHERE main_date is not null
+      GROUP BY
+      settlement_id,
+      main_date,
+      full_date,
+      account,
+      tax_distiction,
+      tax_calc_distinction,
+      remarks,
+      item,
+      department,
+      memo,
+      DATE_TYPE,
+      sku,
+      order_id,
+      posted_date_time,
+      total_purchased
+      )
 
-            CASE
-              WHEN OC.purchase_date IS NULL THEN CAST(FORMAT_DATE("%Y-%m-01",vm.posted_date) AS DATE)
-              ELSE CAST(FORMAT_DATE("%Y-%m-01",OC.purchase_date) AS DATE)
-            END AS purchase_or_posted_date,
+      SELECT
+        CASE
+          WHEN sum(total_real)  < 0 THEN '支出'
+          WHEN sum(total_real)  >= 0 THEN '収入'
+        END AS balance,
+      settlement_id,
+      cast(main_date as DATE) as main_date,
+      CAST(DATETIME_ADD(dat.deposit_date, INTERVAL 9 HOUR) AS DATE) as deposit_date,
+      supplier,
+      account,
+      tax_distiction,
+      abs(sum(total_real)) as total,
+      tax_calc_distinction,
+      CASE
+        when tax_distiction like '%8%' THEN ABS(ROUND(sum(total_real) *0.08))
+        when tax_distiction like '%10%' THEN ABS(ROUND(sum(total_real) *0.1))
+        ELSE 0
+      END AS tax,
+      remarks,
+      item,
+      null as department,
+      null as memo
 
-            vm.amount_type,
-            vm.amount_description,
-            sum(amount) as suma,
-            Case
-              When transaction_type in ('CouponRedemptionFee','Imaging Services') THEN concat(transaction_type,amount_type)
-              ELSE concat(vm.transaction_type,vm.amount_type,vm.amount_description)
-            End as concat_fields
+      from sub left join
+      (SELECT DISTINCT settlement_id as sett,deposit_date FROM Amazon.transaction_view_master where
+            deposit_date is not null) as dat on sub.settlement_id = CAST(CAST(dat.sett AS INT64) AS STRING)
+      group by
+      settlement_id,
+      remarks,
+      main_date,
+      deposit_date,
+      supplier,
+      account,
+      item,
+      tax_distiction,
+      tax_calc_distinction
 
+      -- 475032
+      order by settlement_id desc
 
-            FROM `+ Amazon_datasetId + '.'+ transaction_view_tableId +` as vm
-            LEFT Join
-              (SELECT DISTINCT -- DISTINCT clause for picking only one order_id/purchase_date pair otherwise there are duplicates that change the totals
-                -- amazon_order_id
-                CASE
-                  WHEN merchant_order_id is not null THEN merchant_order_id
-                  ELSE amazon_order_id
-                END AS amazon_order_id,
-                Datetime_add(purchase_date,interval 9 HOUR) as purchase_date
-              From
-                `+ Amazon_datasetId + '.'+ order_central_tableId +`
-              Where amazon_order_id is not null
-              ) AS oc
-            on vm.order_id = oc.amazon_order_id
-
-            group by
-            settlement_id,
-            transaction_type,
-            posted_date,
-            purchase_or_posted_date,
-            amount_type,
-            amount_description
-          ) AS sub_1
-          left join `+ datasetId + '.' + tableId +`
-          on sub_1.concat_fields = concatenated_fields
-
-
-
-      where purchase_or_posted_date >= '2019-01-01'
-
-
-          Group by
-            settlement_id,
-            purchase_or_posted_date,
-            payment_date,
-            supplier,
-            account,
-            tax_distiction,
-            tax_calc_distinction,
-            remarks,
-            item,
-            sub_1.amount_type,
-            department,
-            memo
-
-
-          Order by settlement_id desc
-          )
-          SELECT
-          balance,
-          settlement_id,
-          purchase_or_posted_date,
-          CAST(deposit_date AS DATE) as payment_date,
-          supplier,
-          account,
-          tax_distiction,
-          total_sum,
-          tax_calc_distinction,
-
-          CASE
-            WHEN tax_distiction = '課税売上8%（軽）' THEN  ROUND(abs(total_sum*0.08))
-            WHEN tax_distiction IN ('課対仕入10%','課税売上10%') THEN  ROUND(abs(total_sum*0.1))
-            ELSE 0
-          END AS tax_amount,
-
-          remarks,
-          item,
-          department,
-          memo,
-          DATE_OF_QUERY
-
-          FROM full_report left join (SELECT DISTINCT settlement_id as sett,deposit_date FROM `+ Amazon_datasetId + '.'+ transaction_view_tableId +` where
-           deposit_date is not null) as dat on CAST(dat.sett AS STRING) = full_report.settlement_id
-          ---- WHERE CAST(settlement_id AS INTEGER) >= 11309997823
-          ORDER BY settlement_id desc
-
-
-
-    `
-    ,
+    `,
     useLegacySql: false
   };
   Logger.log('Waiting 3 seconds to bigquery cache the data');
