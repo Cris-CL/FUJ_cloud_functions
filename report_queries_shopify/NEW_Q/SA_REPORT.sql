@@ -1,4 +1,5 @@
 ---- scheduled SA report
+---- Append new values instead of replacing the whole table
 
 WITH SA as (WITH amazon_pay as (
 SELECT
@@ -147,7 +148,7 @@ END AS balance, -- 収支区分 column
 
 settlement_id AS control_number, -- 管理番号 column
 
-FORMAT_DATE("%Y-%m-%d", date_transaction) AS accrual_date, -- 発生日 column  (FORMAT_DATE("%Y-%m-01"
+CAST(date_transaction as DATE) AS accrual_date, -- 発生日 column  (FORMAT_DATE("%Y-%m-01"
 
 null AS settlement_date, -- 決済期日 column
 
@@ -209,4 +210,6 @@ from shopify_filtered
 order by order_number desc, date_transaction)
 
 SELECT * FROM SA
+where amount <> 0
+and control_number not in (select distinct control_number FROM `free.sh_ama_freee_full`)
 order by control_number desc
