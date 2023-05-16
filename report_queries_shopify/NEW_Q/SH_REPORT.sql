@@ -283,5 +283,6 @@ balance,
 CAST(control_number as int64) as control_number,
 * except(balance,control_number)
 from totales
-where amount > 0 -- and control_number = 69517869127 and order_number = '#3447'
+where amount <> 0 -- and control_number = 69517869127 and order_number = '#3447'
+and control_number not in (SELECT DISTINCT control_number FROM `free.shopify_freee_full`)
 order by CAST(control_number as int64) desc,order_number asc, account
