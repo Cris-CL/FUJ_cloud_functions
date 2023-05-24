@@ -211,5 +211,5 @@ order by order_number desc, date_transaction)
 
 SELECT * FROM SA
 where amount <> 0
-and control_number not in (select distinct control_number FROM `free.sh_ama_freee_full`)
+and control_number not in (select distinct control_number FROM `free.sh_ama_freee_full` where control_number is not null)
 order by control_number desc
