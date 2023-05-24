@@ -217,6 +217,6 @@ CASE
 END AS balance, -- 収支区分 column
 dtim.* except(diff_time)
 from dtim
-where SETT_NUMBER not in (SELECT DISTINCT SETT_NUMBER FROM `free.stripe_freee_full`)
+where SETT_NUMBER not in (SELECT DISTINCT SETT_NUMBER FROM `free.stripe_freee_full` where SETT_NUMBER is not null)
 and amount <> 0
 order by date_3 desc
