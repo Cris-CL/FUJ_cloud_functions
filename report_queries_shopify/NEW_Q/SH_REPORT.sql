@@ -1,4 +1,4 @@
---- scheduled sh report updated 05-02
+--- scheduled sh report updated 05-24
 
 with totales as (
 WITH shopify_filtered as (
@@ -284,5 +284,6 @@ CAST(control_number as int64) as control_number,
 * except(balance,control_number)
 from totales
 where amount <> 0 -- and control_number = 69517869127 and order_number = '#3447'
-and control_number not in (SELECT DISTINCT control_number FROM `free.shopify_freee_full`)
+and control_number not in (SELECT DISTINCT control_number FROM `free.shopify_freee_full`
+where control_number is not null)
 order by CAST(control_number as int64) desc,order_number asc, account
