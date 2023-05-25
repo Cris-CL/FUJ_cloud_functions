@@ -1,4 +1,5 @@
---- new rakuten scheduled  2020-23
+--- rakuten_report_full
+--- new rakuten scheduled 2020-23
 --- Query now only appends new values
 
 With sub_2 as (
@@ -8,7 +9,7 @@ WITH sub_query_1 as
   with full_rak as (
     SELECT
   order_number,
-  order_date,
+  order_date_time as order_date,
   status,
   product_name,
   item_number,
@@ -27,7 +28,7 @@ FROM
 union all
 SELECT
   order_number,
-  CAST(order_date as DATETIME) as order_date,
+  CAST(order_date_time as DATETIME) as order_date,
   status,
   product_name,
   item_number,
@@ -172,4 +173,7 @@ order by order_date desc
 
 select * from sub_2
 where control_number is not null and amount <> 0
-and control_number not in (SELECT distinct control_number FROM `free.rakuten_report_full`)
+and control_number not in (
+  SELECT distinct control_number FROM `free.rakuten_report_full`
+  where control_number is not null
+  )
