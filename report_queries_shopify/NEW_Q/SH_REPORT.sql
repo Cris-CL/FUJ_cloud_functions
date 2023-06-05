@@ -1,4 +1,5 @@
---- scheduled sh report updated 05-24
+--- scheduled sh report
+--- updated 06-05
 
 with totales as (
 WITH shopify_filtered as (
@@ -39,6 +40,7 @@ WITH shopify_filtered as (
       CASE
         WHEN pay.source_type like '%Refund' and financial_status = 'partially_refunded' THEN 'partial refund'
         WHEN pay.type = 'adjustment' THEN pay.type
+        WHEN om.lineitem_sku is null THEN 'SPECIAL_ITEM'
         ELSE om.lineitem_sku
       END AS sku,
       om.shipping_shop_amount as shipping,
