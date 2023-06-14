@@ -1,11 +1,7 @@
 # functions-framework==3.*
 # pandas==1.5.1
-# google-cloud-bigquery==3.3.5
-# google-cloud-storage>==2.5.0
-
-# fsspec==2022.11.0
-# gcsfs==2022.11.0
-# pyarrow==9.0.0
+# google-cloud-bigquery>=3.3.5
+# google-cloud-storage>=2.5.0
 
 import os
 import pandas as pd
@@ -57,6 +53,7 @@ data_types = {
         'merchant_adjustment_item_id': 'float',
         'sku': 'str',
         'quantity_purchased': 'float',
+        "promotion_id":"str"
 
     },
     'oc':{
@@ -88,6 +85,7 @@ data_types = {
         "ship_state": "str",
         "ship_postal_code": "str",
         "ship_country": "str",
+        "promotion_ids":"str"
     }
 }
 
@@ -149,6 +147,9 @@ def amazon_sg_process(cloud_event):
         df = pd.read_table(uri)
         report_type = 'oc'
         print(report_type)
+
+    if 'promotion-id' not in df.columns and report_type == 'tv':
+        df['promotion-id'] = None
 
 
     rep_dest = rep_classifier[report_type]
@@ -220,7 +221,7 @@ def amazon_sg_process(cloud_event):
     blob_name = name
     destination_bucket_name = new_bucket
     folder_name = f'Amazon/{rep_classifier[report_type]["folder"]}'
-    new_name = f'{rep_classifier[report_type]["prefix"]}_{blob_name}'
+    new_name = f'{blob_name}'
     destination_blob_name = f'{folder_name}/{new_name}'
 
     ### Call the function
