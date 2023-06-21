@@ -231,9 +231,10 @@ function use_local_nomenclature22() {
       tax_distiction,
       tax_calc_distinction
 
+      having sum(total_real) <> 0
+
       -- 475032
       order by settlement_id desc
-
     `,
     useLegacySql: false
   };
@@ -290,7 +291,7 @@ function use_local_nomenclature22() {
     return field.name;
   });
   // var HEADER = ["収支区分","管理番号","発生日","勘定科目","税計算区分","金額","備考","品目","amount_type","DATE_OF_QUERY"]  // Change according to the headers wanted for the results
-  var HEADER= ['収支区分','管理番号','発生日','支払期日','取引先','勘定科目','税区分','金額','税計算区分','税額','備考','品目','部門','メモタグ（複数指定可、カンマ区切り）','DATE_OF_QUERY'];
+  var HEADER= ['収支区分','管理番号','発生日','支払期日','取引先','勘定科目','税区分','金額','税計算区分','税額','備考','品目','部門','メモタグ（複数指定可、カンマ区切り）'];
   sheet.appendRow(HEADER);
 
   // sheet.appendRow(headers);
