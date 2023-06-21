@@ -145,15 +145,13 @@ def amazon_sg_process(cloud_event):
     if 'tv' in name.lower():
         df = pd.read_table(uri,header=7)
         report_type = 'tv'
+        if 'promotion-id' not in df.columns and report_type == 'tv':
+            df['promotion-id'] = None
         print(report_type)
     elif 'oc' in name.lower():
         df = pd.read_table(uri)
         report_type = 'oc'
         print(report_type)
-
-    if 'promotion-id' not in df.columns and report_type == 'tv':
-        df['promotion-id'] = None
-
 
     rep_dest = rep_classifier[report_type]
     try:
@@ -168,7 +166,7 @@ def amazon_sg_process(cloud_event):
         bucket_name = bucket
         blob_name = name
         destination_bucket_name = new_bucket
-        folder_name = f'Amazon/repeated_files'
+        folder_name = f'Amazon_SG/repeated_files'
         new_name = f'{rep_classifier[report_type]["prefix"]}_{blob_name}'
         destination_blob_name = f'{folder_name}/{new_name}'
         move_blob(bucket_name, blob_name, destination_bucket_name, destination_blob_name)
@@ -223,7 +221,7 @@ def amazon_sg_process(cloud_event):
     bucket_name = bucket
     blob_name = name
     destination_bucket_name = new_bucket
-    folder_name = f'Amazon/{rep_classifier[report_type]["folder"]}'
+    folder_name = f'Amazon_SG/{rep_classifier[report_type]["folder"]}'
     new_name = f'{blob_name}'
     destination_blob_name = f'{folder_name}/{new_name}'
 
