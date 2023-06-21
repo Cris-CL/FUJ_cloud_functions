@@ -235,7 +235,6 @@ function use_local_nomenclature22() {
 
       -- 475032
       order by settlement_id desc
-
     `,
     useLegacySql: false
   };

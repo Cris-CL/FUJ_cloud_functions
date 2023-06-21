@@ -147,13 +147,15 @@ def amazon_sg_process(cloud_event):
         report_type = 'tv'
         if 'promotion-id' not in df.columns and report_type == 'tv':
             df['promotion-id'] = None
+        rep_dest = rep_classifier[report_type]
         print(report_type)
     elif 'oc' in name.lower():
         df = pd.read_table(uri)
         report_type = 'oc'
+        rep_dest = rep_classifier[report_type]
         print(report_type)
 
-    rep_dest = rep_classifier[report_type]
+
     try:
         list_uploaded = get_list_reports(dataset,rep_dest["destination_table"])
     except:
@@ -227,3 +229,4 @@ def amazon_sg_process(cloud_event):
 
     ### Call the function
     move_blob(bucket_name, blob_name, destination_bucket_name, destination_blob_name)
+    return "ok"
