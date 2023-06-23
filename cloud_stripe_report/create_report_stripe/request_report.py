@@ -5,7 +5,7 @@ from google.cloud import bigquery
 import stripe
 import os
 from datetime import datetime, date, time,timedelta
-
+from payouts import payout_request
 
 def stripe_weekly():
   """
@@ -65,5 +65,6 @@ def stripe_weekly():
         ]
     },)
 
-def main(data,context):
+def request_reports(data,context):
   stripe_weekly()
+  payout_request()

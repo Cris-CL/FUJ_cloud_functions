@@ -3,6 +3,11 @@
 # import os
 # from datetime import datetime, date, time,timedelta
 
+from google.cloud import bigquery
+import stripe
+import os
+from datetime import datetime, date, time,timedelta
+
 def payout_request():
 
     """
@@ -11,11 +16,11 @@ def payout_request():
     """
 
     api_key_local = os.environ.get('stripe_key')
-    table_q = os.environ.get('TABLE_QUERY_PAY')
+    table_q_p = os.environ.get('TABLE_QUERY_PAY')
     stripe.api_key = api_key_local
 
     ## Query to get last transaction in bq
-    query =f"""SELECT max(charge_created_utc) FROM `{table_q}`""" ## ORIGINAL
+    query =f"""SELECT max(charge_created_utc) FROM `{table_q_p}`""" ## ORIGINAL
     client_q = bigquery.Client()
     query_job = client_q.query(query)  # Make an API request.
     rows = query_job.result()

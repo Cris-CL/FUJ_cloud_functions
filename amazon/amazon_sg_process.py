@@ -154,6 +154,8 @@ def amazon_sg_process(cloud_event):
         report_type = 'oc'
         rep_dest = rep_classifier[report_type]
         print(report_type)
+    else:
+        return print("incorrect report")
 
 
     try:
