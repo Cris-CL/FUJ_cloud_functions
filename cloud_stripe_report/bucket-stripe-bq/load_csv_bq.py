@@ -150,8 +150,9 @@ def upload_stripe_bq(cloud_event):
         upload_ama(df_ama,table_upload)
 
         ama_file_name = name[:-4]
+        year = ama_file_name[4:8]
 
-        filename = f'Shopify/amazon_pay/{ama_file_name}.csv'
+        filename = f'Shopify/amazon_pay/{year}/{ama_file_name}.csv'
         storage_client = storage.Client()
         bucket = storage_client.list_buckets().client.bucket('fujiorg-sales-data')
         blob = bucket.blob(filename)
