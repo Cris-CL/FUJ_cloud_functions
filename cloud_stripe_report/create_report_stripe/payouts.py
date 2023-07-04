@@ -1,9 +1,3 @@
-# from google.cloud import bigquery
-# import stripe
-# import os
-# from datetime import datetime, date, time,timedelta
-
-from google.cloud import bigquery
 import stripe
 import os
 from datetime import datetime, date, time,timedelta
@@ -11,33 +5,30 @@ from datetime import datetime, date, time,timedelta
 def payout_request():
 
     """
-    Function generates a request for a report that covers from friday one week ago to saturday 2 days ago
-    assuming the function is triggered every monday
+    Function generates a request for a report that covers from one second after the last report until 2 days ago
     """
 
     api_key_local = os.environ.get('stripe_key')
-    table_q_p = os.environ.get('TABLE_QUERY_PAY')
     stripe.api_key = api_key_local
-
-    ## Query to get last transaction in bq
-    query =f"""SELECT max(charge_created_utc) FROM `{table_q_p}`""" ## ORIGINAL
-    client_q = bigquery.Client()
-    query_job = client_q.query(query)  # Make an API request.
-    rows = query_job.result()
-    result = list(rows)[0]
-    last_result_timestamp = int(datetime.timestamp(result[0])) + 1
-    ## Start period from last payment in table
-    start_var = last_result_timestamp
+    report_var = "payout_reconciliation.itemized.5"
 
     ## end_time is at 23:59:59 hrs 1 day before the execution of the funciton
+    reportes_stripe = stripe.reporting.ReportRun.list(limit=10)
+    max_timestamp = 0
+
+    for rep in reportes_stripe["data"]:
+        if rep["report_type"] == report_var:
+            max_timestamp = max(max_timestamp,rep["parameters"]["interval_end"])
+
+    start_var = max_timestamp + 1
 
     today = datetime.combine(date.today(), time())
-    end_time = today - timedelta(days=1,hours=5,seconds=1)
+    end_time = today - timedelta(days=1,hours=0,seconds=1) ## today date minus 1 day and 1 second --> At 23:59:59 2 days ago from execution time
     end_var = str(int(end_time.timestamp()))
 
     ## Type of report to create
     ## ref: https://stripe.com/docs/reports/report-types
-    report_var = "payout_reconciliation.itemized.5"
+
 
     report_dict = stripe.reporting.ReportRun.create(
     report_type = report_var,
