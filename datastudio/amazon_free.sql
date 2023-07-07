@@ -35,11 +35,13 @@ oc.purchase_date,
 
 CASE ------REFUNDS APPEAR AT THE SETTLEMENT DATE NOW
   WHEN transaction_type = 'Refund' THEN tv.posted_date_time
+  WHEN amount_type = 'FBA Inventory Reimbursement' THEN tv.posted_date_time
   WHEN oc.purchase_date is null THEN tv.posted_date_time
   ELSE oc.purchase_date
 END AS main_date,
 CASE
   WHEN transaction_type = 'Refund' THEN 'POSTED_DATE_REFUND'
+  WHEN amount_type = 'FBA Inventory Reimbursement' THEN 'POSTED_DATE_REIMBURSEMENT'
   WHEN oc.purchase_date is null THEN 'POSTED_DATE'
   ELSE 'ORDER_DATE'
 END AS DATE_TYPE
@@ -118,7 +120,6 @@ full_date as order_full_date
 from sub left join
 (SELECT DISTINCT settlement_id as sett,deposit_date FROM Amazon.transaction_view_master where
       deposit_date is not null) as dat on sub.settlement_id = CAST(CAST(dat.sett AS INT64) AS STRING)
--- 475032
-where settlement_id not in (select distinct settlement_id from `free.amazon_report_full` where settlement_id is not null)
 
-order by settlement_id desc
+where settlement_id not in (select distinct settlement_id from `free.amazon_report_full` where settlement_id is not null)
+order by settlement_id desc ,main_date asc
