@@ -1,8 +1,8 @@
 # requirements.txt
-# pandas>=1.2.2
+# pandas==1.5.1
 # google-cloud-storage==1.44.0
 # google-cloud-bigquery>=3.3.5
-# pandas-gbq>=0.17.9
+# pandas-gbq==0.17.9
 
 import os
 import requests
@@ -195,25 +195,27 @@ def main(data, context):
     dt = datetime.now()
     if dt.weekday() == 0:  ##corrected df for dt
         ## Delete the previous 2 weeks every monday to get rid of the pending
-        print("cleaning pending orders")
-        with bigquery.Client() as bq_cl_tmp:
 
-            q_tmp = """
-                    -- deleting last 2 weeks get_orders function
-                    DELETE `test-bigquery-cc.Shopify.orders_master`
-                    Where name > (
-                        SELECT max(name)
-                        FROM `test-bigquery-cc.Shopify.orders_master`
-                        WHERE created_at < CAST(DATE_SUB(CURRENT_DATE(), INTERVAL 14 DAY) AS TIMESTAMP)
-                        -- today minus 14 days
-                        )
-                    """
-            try:
-                del_job = bq_cl_tmp.query(q_tmp)  # Make an API request.
-                del_job.result()
-            except Exception as err:
-                print(f"Unexpected {err=}, {type(err)=}")
-                print("Couldn'd delete the last 2 weeks orders")
+        bq_cl_tmp = bigquery.Client()
+
+        q_tmp = """
+                -- deleting last 2 weeks get_orders function
+                DELETE `test-bigquery-cc.Shopify.orders_master`
+                Where name > (
+                    SELECT max(name)
+                    FROM `test-bigquery-cc.Shopify.orders_master`
+                    WHERE created_at < CAST(DATE_SUB(CURRENT_DATE(), INTERVAL 14 DAY) AS TIMESTAMP)
+                    -- today minus 14 days
+                    )
+                """
+        print("cleaning pending orders")
+        try:
+            del_job = bq_cl_tmp.query(q_tmp)  # Make an API request.
+            del_job.result()
+            print("Deleted last 2 weeks of orders")
+        except Exception as err:
+            print(f"Unexpected {err=}, {type(err)=}")
+            print("Couldn'd delete the last 2 weeks orders")
 
     ## Get data
     bigquery_client = bigquery.Client()
