@@ -17,7 +17,7 @@ password = os.environ.get("SHOPIFY_PASS")
 bucket_name = os.environ.get("BUCKET")
 project_name = os.environ.get("PROJECT_NAME")
 table_name = os.environ.get("TABLE_NAME")
-
+shop_name = os.environ.get("STORE_NAME")
 
 def get_all_orders(last_order_id):
     """
@@ -29,7 +29,6 @@ def get_all_orders(last_order_id):
 
     limit = 250
     status = "any"
-    shop_name = "fuji-organics"
     orders = pd.DataFrame()
     fields = ",".join(
         [
@@ -186,6 +185,39 @@ def refunds(df):
     df.drop(columns="refunds", inplace=True)
     return df
 
+def get_transactions(id_list):
+
+    transactions = pd.DataFrame()
+    for order_id in set(id_list):
+
+        url = f"https://{apikey}:{password}@{shop_name}.myshopify.com/admin/api/{api_version}/orders/{order_id}/transactions.json"
+        response_in = requests.get(url)
+        df = pd.json_normalize(response_in.json()["transactions"][0])
+        transactions = pd.concat([transactions, df], ignore_index=True)
+
+    trans_filter = transactions[["order_id","authorization"]]
+    return trans_filter
+
+def join_orders_transactions(orders_df,transactions_df):
+    transactions_df = transactions_df.astype({"order_id":"string"})
+    try:
+        new_df = pd.merge(orders_df,
+                          transactions_df,
+                          left_on="id",
+                          right_on="order_id",
+                          how="left",
+                          validate="many_to_one")
+        new_df['reference'] = new_df['reference'].fillna(new_df['authorization'])
+        new_df = new_df.drop(columns=["order_id","authorization"])
+
+        assert new_df.shape == orders_df.shape
+
+    except Exception as err:
+        print(f"Unexpected {err=}, {type(err)=}")
+        print(new_df.shape,orders_df.shape)
+        new_df = orders_df
+
+    return new_df
 
 def main(data, context):
     """
@@ -333,6 +365,16 @@ def main(data, context):
 
     df["checkout_id"] = df["checkout_id"].apply(lambda x: str(int(float(x)))
                                                 if type(x) == type("") else x)
+
+    ## getting the stripe confirmation number
+    try:
+        stripe_list = set(df[df["payment_gateway_names"]=="stripe"]["id"])
+        transactions = get_transactions(stripe_list)
+        df = join_orders_transactions(df,transactions)
+
+    except Exception as e:
+        print(e)
+
     ## Upload to BQ
     try:
         df.to_gbq(
