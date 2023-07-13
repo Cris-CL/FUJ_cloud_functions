@@ -125,11 +125,13 @@ function use_local_nomenclature22() {
 
       CASE ------REFUNDS APPEAR AT THE SETTLEMENT DATE NOW
         WHEN transaction_type = 'Refund' THEN tv.posted_date_time
+        WHEN amount_type = 'FBA Inventory Reimbursement' THEN tv.posted_date_time
         WHEN oc.purchase_date is null THEN tv.posted_date_time
         ELSE oc.purchase_date
       END AS main_date,
       CASE
         WHEN transaction_type = 'Refund' THEN 'POSTED_DATE_REFUND'
+        WHEN amount_type = 'FBA Inventory Reimbursement' THEN 'POSTED_DATE_REIMBURSEMENT'
         WHEN oc.purchase_date is null THEN 'POSTED_DATE'
         ELSE 'ORDER_DATE'
       END AS DATE_TYPE
@@ -220,6 +222,7 @@ function use_local_nomenclature22() {
       from sub left join
       (SELECT DISTINCT settlement_id as sett,deposit_date FROM Amazon.transaction_view_master where
             deposit_date is not null) as dat on sub.settlement_id = CAST(CAST(dat.sett AS INT64) AS STRING)
+      where settlement_id > '11306499723' --------- this is the last settlement_id up to 2022 after this starts the 2023
       group by
       settlement_id,
       remarks,
@@ -235,6 +238,7 @@ function use_local_nomenclature22() {
 
       -- 475032
       order by settlement_id desc
+
     `,
     useLegacySql: false
   };
@@ -309,3 +313,9 @@ function use_local_nomenclature22() {
 
 
 }
+// This is the final function to create the smaller report once the big one is on the sheet
+// =QUERY({$A:$N,ARRAYFORMULA(IF($A:$A="支出",-$H:$H,$H:$H)),
+// ARRAYFORMULA(DATE(YEAR($C:$C),MONTH($C:$C),1))},
+// "select Col1,Col2,Col16,Col4,Col5,Col6,Col7,sum(Col8),Col9,Sum(Col10),Col11,Col12,Col13,Col14,sum(Col15)
+// group by Col1,Col2,Col16,Col4,Col5,Col6,Col7,Col9,Col11,Col12,Col13,Col14
+// order by Col2 desc label Sum(Col15) 'real_value', Sum(Col10) '税額', Col16 '発生日',Sum(Col8) '金額'")
