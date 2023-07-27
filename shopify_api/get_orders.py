@@ -19,7 +19,6 @@ project_name = os.environ.get("PROJECT_NAME")
 table_name = os.environ.get("TABLE_NAME")
 shop_name = os.environ.get("STORE_NAME")
 
-
 def get_all_orders(last_order_id):
     """
     Main Function, when provided last_order_id, loops throught all the orders
@@ -76,7 +75,7 @@ def get_all_orders(last_order_id):
             "total-price",
             "total-tax",
             "shipping-address",
-            "total-discounts",  ### Added total discounts field
+            "total-discounts" ### Added total discounts field
         ]
     )
     print(f"First order_id: {last}")
@@ -186,7 +185,6 @@ def refunds(df):
     df.drop(columns="refunds", inplace=True)
     return df
 
-
 def get_transactions(id_list):
 
     transactions = pd.DataFrame()
@@ -197,33 +195,29 @@ def get_transactions(id_list):
         df = pd.json_normalize(response_in.json()["transactions"][0])
         transactions = pd.concat([transactions, df], ignore_index=True)
 
-    trans_filter = transactions[["order_id", "authorization"]]
+    trans_filter = transactions[["order_id","authorization"]]
     return trans_filter
 
-
-def join_orders_transactions(orders_df, transactions_df):
-    transactions_df = transactions_df.astype({"order_id": "string"})
+def join_orders_transactions(orders_df,transactions_df):
+    transactions_df = transactions_df.astype({"order_id":"string"})
     try:
-        new_df = pd.merge(
-            orders_df,
-            transactions_df,
-            left_on="id",
-            right_on="order_id",
-            how="left",
-            validate="many_to_one",
-        )
-        new_df["reference"] = new_df["reference"].fillna(new_df["authorization"])
-        new_df = new_df.drop(columns=["order_id", "authorization"])
+        new_df = pd.merge(orders_df,
+                          transactions_df,
+                          left_on="id",
+                          right_on="order_id",
+                          how="left",
+                          validate="many_to_one")
+        new_df['reference'] = new_df['reference'].fillna(new_df['authorization'])
+        new_df = new_df.drop(columns=["order_id","authorization"])
 
         assert new_df.shape == orders_df.shape
 
     except Exception as err:
         print(f"Unexpected {err=}, {type(err)=}")
-        print(new_df.shape, orders_df.shape)
+        print(new_df.shape,orders_df.shape)
         new_df = orders_df
 
     return new_df
-
 
 def main(data, context):
     """
@@ -352,34 +346,31 @@ def main(data, context):
         "ship_longitude": "float64",
         "ship_country_code": "str",
         "ship_province_code": "str",
-        "total_discounts": "float64",
+        "total_discounts":"float64"
     }
 
     df = df.astype(dict_types)
     ## Delete nan strings or empty values
     for col in df.columns:
-        df[col] = df[col].apply(
-            lambda x: None if x in ["nan", "", "None", "null"] else x
-        )
+        df[col] = df[col].apply(lambda x: None
+                                if x in ["nan", "", "None", "null"] else x)
         if col not in dict_types.keys():
-            ##### dropping columns that shouldnt appear
-            df.drop(
-                columns=[col],
-                inplace=True,
-            )
+        ##### dropping columns that shouldnt appear
+                df.drop(
+                    columns=[col],inplace=True,
+                )
 
     today_date = date.today().strftime("%Y_%m_%d")
     file_name = f"SHOPIFY_ORDERS_{today_date}_{result}_RAW.csv"
 
-    df["checkout_id"] = df["checkout_id"].apply(
-        lambda x: str(int(float(x))) if type(x) == type("") else x
-    )
+    df["checkout_id"] = df["checkout_id"].apply(lambda x: str(int(float(x)))
+                                                if type(x) == type("") else x)
 
     ## getting the stripe confirmation number
     try:
-        stripe_list = set(df[df["payment_gateway_names"] == "stripe"]["id"])
+        stripe_list = set(df[df["payment_gateway_names"]=="stripe"]["id"])
         transactions = get_transactions(stripe_list)
-        df = join_orders_transactions(df, transactions)
+        df = join_orders_transactions(df,transactions)
 
     except Exception as e:
         print(e)
