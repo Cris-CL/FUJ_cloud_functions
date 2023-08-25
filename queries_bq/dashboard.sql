@@ -1,5 +1,5 @@
 ----- Scheduled dashboard
------ Updated 08-22 added taxes columns
+----- Updated 08-25 tax fix using original values
 with full_data as (---- AMAZON PART ----
 SELECT
 order_full_date as transaction_date,
@@ -147,8 +147,37 @@ CASE
   ELSE 0
 END AS quantity,
 tax_multip,
-ROUND(amount/(1+tax_multip)) as amount_no_tax,
+amount as amount_no_tax,
 amount - ROUND(amount/(1+tax_multip)) as amount_tax
 from full_data LEFT JOIN
 `Datastudio.combined_sku` as sk on full_data.sku = sk.sku_item and sk.store_name = full_data.SOURCE
 where amount <> 0
+UNION ALL
+
+SELECT
+CAST(transaction_date AS DATETIME) as transaction_date,
+null as amount,
+null as sku,
+CASE
+WHEN supplier like "%Shopify%" Then 'Shopify'
+WHEN supplier like "%Rakuten%" Then 'Rakuten'
+WHEN supplier = 'Amazon Seller' Then 'Amazon'
+END as SOURCE,
+null as zip_code,
+item,
+settlement_id,
+null as item_name,
+account,
+null as quantity,
+null as tax_multip,
+- tax_amount as amount_no_tax,
+amount as amount_tax
+FROM `test-bigquery-cc.free_adj.full_imported`
+where supplier in (
+  'Shopify',
+  'Shopify Komoju',
+  'Shopify Stripe',
+  'Shopify Amazon',
+  'Rakuten',
+  'Amazon Seller'
+)
