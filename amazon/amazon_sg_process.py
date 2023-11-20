@@ -34,9 +34,6 @@ rep_classifier = {
 data_types = {
     'tv':{
         'settlement_id': 'float',
-        'settlement_start_date': 'datetime64',
-        'settlement_end_date': 'datetime64',
-        'deposit_date': 'datetime64',
         'total_amount': 'float',
         'currency': 'str',
         'transaction_type': 'str',
@@ -49,8 +46,6 @@ data_types = {
         'amount_description': 'str',
         'amount': 'float',
         'fulfillment_id': 'str',
-        'posted_date': 'datetime64',
-        'posted_date_time': 'datetime64',
         'order_item_code': 'str',
         'merchant_order_item_id': 'str',
         'merchant_adjustment_item_id': 'float',
@@ -62,8 +57,6 @@ data_types = {
     'oc':{
         "amazon_order_id": "str",
         "merchant_order_id": "str",
-        "purchase_date": "datetime64",
-        "last_updated_date": "datetime64",
         "order_status": "str",
         "fulfillment_channel": "str",
         "sales_channel": "str",
@@ -91,6 +84,32 @@ data_types = {
         "promotion_ids":"str"
     }
 }
+
+datetime_format = {
+    'tv':'%d.%m.%Y %H:%M:%S %Z',
+    'oc':'%Y-%m-%dT%H:%M:%S%z'
+    }
+date_format = '%d.%m.%Y'
+
+datetime_columns = {
+    'tv': [
+        'settlement_start_date', # datetime
+        'settlement_end_date', # datetime
+        'deposit_date', # datetime
+        'posted_date', # date
+        'posted_date_time', # datetime
+        ]
+    ,
+    'oc': [
+        "purchase_date",
+        "last_updated_date",
+        ]
+}
+date_columns = {
+    'tv':[
+        'posted_date'
+        ]
+    }
 
 
 def get_list_reports(dataset,table):
@@ -182,12 +201,27 @@ def amazon_sg_process(cloud_event):
     df.columns = df.columns.map(lambda x: x.lower().strip().replace("-","_"))
 
     df = df.astype(data_types[report_type])
+    ### date formatting
+    for column in datetime_columns[report_type]:
+        try:
+            df[column] = pd.to_datetime(df[column], format=datetime_format[report_type])
+        except:
+            print(column)
+            df[column] = pd.to_datetime(df[column], format=date_format)
+    if report_type == 'tv':
+        for column in date_columns[report_type]:
+            try:
+                df[column] = pd.to_datetime(df[column], format=date_format)
+            except:
+                print(column)
+                df[column] = pd.to_datetime(df[column], format=datetime_format[report_type])
 
     for col in df.columns:
     ### remove empty strings and nan values
         df[col] = df[col].map(
-            lambda x: None if type(x) == type("") and x in ["nan","NaN","NAN","Null","null",""] else x
+            lambda x: None if isinstance(x,str) and x in ["nan","NaN","NAN","Null","null",""] else x
             )
+
     df[['file']] = name
 
     #### UPLOAD TO BQ
@@ -200,6 +234,8 @@ def amazon_sg_process(cloud_event):
         "int64": "INTEGER",
         "float64": "FLOAT",
         "datetime64[ns]": "DATETIME",
+        'datetime64[ns, UTC]': "DATETIME",
+        'datetime64[ns, pytz.FixedOffset(540)]': "DATETIME",
     }
     disposition = "WRITE_APPEND"
 
