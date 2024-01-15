@@ -10,6 +10,9 @@ import pandas as pd
 from google.cloud import bigquery
 from google.cloud import storage
 from datetime import datetime, date
+from dotenv import load_dotenv
+
+load_dotenv()
 
 apikey = os.environ.get("SHOPIFY_KEY")
 api_version = os.environ.get("API_VERSION")
@@ -62,10 +65,10 @@ def get_all_orders(last_order_id):
             "source-name",
             "line-items",
             "updated-at",
-            "cart-token",
-            "checkout-token",
+            "cart-token", #### deprecated
+            "checkout-token", #### deprecated
             "note-attributes",
-            "token",
+            "token", #### deprecated
             "checkout-id",
             "tags",
             "refering-site",
