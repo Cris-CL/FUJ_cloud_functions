@@ -219,6 +219,7 @@ def join_orders_transactions(orders_df, transactions_df):
         assert new_df.shape == orders_df.shape
 
     except Exception as err:
+        print("Error join_orders_transactions function")
         print(f"Unexpected {err=}, {type(err)=}")
         print(new_df.shape, orders_df.shape)
         new_df = orders_df
@@ -312,7 +313,7 @@ def type_change(df):
             lambda x: None if x in ["nan", "", "None", "null"] else x
         )
         if col not in dict_types.keys():
-            ##### dropping columns that shouldnt appear
+    ##### dropping columns that shouldnt appear
             df.drop(
                 columns=[col],
                 inplace=True,
@@ -329,7 +330,8 @@ def stripe_process(df):
         transactions = get_transactions(stripe_list)
         df = join_orders_transactions(df, transactions)
     except Exception as e:
-        print(e)
+        print(e,type(e))
+        print("Stripe process failed")
     return df.copy()
 
 
@@ -339,11 +341,12 @@ def upload_to_bq(df, today_date, result):
             destination_table=table_name,
             project_id=project_name,
             progress_bar=False,
-            if_exists="append",
-        )  ### should be append
+            if_exists="append", ### should be append
+        )
         print("Data uploaded to BigQuery")
     except Exception as e:
-        print(e)
+        print("Couldn't upload data to BigQuery table, with error:")
+        print(e,type(e))
         print("Saving data to bucket")
         storage_client = storage.Client()
         bucket = storage_client.list_buckets().client.bucket(bucket_name)
@@ -364,16 +367,17 @@ def main(data, context):
 
         bq_cl_tmp = bigquery.Client()
         ## Changed to better select the last order in the previous 2 weeks
-        q_tmp = """
-                -- deleting last 2 weeks get_orders function
-                DELETE `test-bigquery-cc.Shopify.orders_master`
-                Where CAST(order_number as int64) > (
-                    SELECT max(CAST(order_number as int64))
-                    FROM `test-bigquery-cc.Shopify.orders_master`
-                    WHERE created_at < CAST(DATE_SUB(CURRENT_DATE(), INTERVAL 14 DAY) AS TIMESTAMP)
-                    -- today minus 14 days
-                    )
-                """
+        q_tmp = f"""
+        -- deleting last 2 weeks get_orders function
+        DELETE `{project_name}.{table_name}`
+        Where
+            CAST(order_number as int64) > (
+                SELECT max(CAST(order_number as int64))
+                FROM `{project_name}.{table_name}`
+                WHERE created_at < CAST(DATE_SUB(CURRENT_DATE(), INTERVAL 14 DAY) AS TIMESTAMP)
+                -- today minus 14 days
+            )
+            """
         print("cleaning pending orders")
         try:
             del_job = bq_cl_tmp.query(q_tmp)  # Make an API request.
@@ -387,10 +391,10 @@ def main(data, context):
     bigquery_client = bigquery.Client()
 
     ## query select the id correspondig to the last order in the table
-    query = """
+    query = f"""
     select distinct id
-    FROM `test-bigquery-cc.Shopify.orders_master`
-    Where CAST(order_number as integer) = (SELECT max(CAST(order_number as integer)) FROM `test-bigquery-cc.Shopify.orders_master`)
+    FROM `{project_name}.{table_name}`
+    Where CAST(order_number as integer) = (SELECT max(CAST(order_number as integer)) FROM `{project_name}.{table_name}`)
     """
     ##### previously the max(name) caused problems because it was an string and the max string was #9999 and since then the orders were duplicated
 
@@ -424,11 +428,6 @@ def main(data, context):
 
     today_date = date.today().strftime("%Y_%m_%d")
     file_name = f"SHOPIFY_ORDERS_{today_date}_{result}_RAW.csv"
-
-    # df["checkout_id"] = df["checkout_id"].apply(lambda x: str(int(float(x)))
-    #                                             if type(x) == type("") else x)
-
-    ## getting the stripe confirmation number
 
     ## Upload to BQ
     upload_to_bq(df, today_date, result)
