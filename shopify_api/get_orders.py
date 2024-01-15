@@ -10,9 +10,7 @@ import pandas as pd
 from google.cloud import bigquery
 from google.cloud import storage
 from datetime import datetime, date
-from dotenv import load_dotenv
 
-load_dotenv()
 
 apikey = os.environ.get("SHOPIFY_KEY")
 api_version = os.environ.get("API_VERSION")
@@ -53,7 +51,6 @@ def get_all_orders(last_order_id):
             "financial-status",
             "fulfillment-status",
             "refunds",  ### added 18/01/23 for get the refund amounts
-            # "gateway",
             "note",
             "number",
             "order-number",
@@ -65,10 +62,11 @@ def get_all_orders(last_order_id):
             "source-name",
             "line-items",
             "updated-at",
-            "cart-token", #### deprecated
-            "checkout-token", #### deprecated
+            # "gateway",
+            # "cart-token", #### deprecated
+            # "checkout-token", #### deprecated
+            # "token", #### deprecated
             "note-attributes",
-            "token", #### deprecated
             "checkout-id",
             "tags",
             "refering-site",
@@ -83,22 +81,22 @@ def get_all_orders(last_order_id):
     )
     print(f"First order_id: {last}")
     while True:
-        url = f"https://{apikey}:{password}@{shop_name}.myshopify.com/admin/api/{api_version}/orders.json?limit={limit}&fields={fields}&status={status}&since_id={last}"
-        response_in = requests.get(url)
-        df = pd.json_normalize(response_in.json()["orders"])
+            url = f"https://{apikey}:{password}@{shop_name}.myshopify.com/admin/api/{api_version}/orders.json?limit={limit}&fields={fields}&status={status}&since_id={last}"
+            response_in = requests.get(url)
+            df = pd.json_normalize(response_in.json()["orders"])
 
-        # Function finishes with no new info
-        if len(df) < 1:
-            print("Api didnt provide new data")
-            return last
+            # Function finishes with no new info
+            if len(df) < 1:
+                print("Api didnt provide new data")
+                return last
 
-        orders = pd.concat([orders, df], ignore_index=True)
-        last = df["id"].iloc[-1]
+            orders = pd.concat([orders, df], ignore_index=True)
+            last = df["id"].iloc[-1]
 
-        if len(df) < limit:
-            print(f"Last order_id: {last}")
-            print(len(orders))
-            break
+            if len(df) < limit:
+                print(f"Last order_id: {last}")
+                print(len(orders))
+                break
     return orders
 
 
@@ -222,73 +220,13 @@ def join_orders_transactions(orders_df,transactions_df):
 
     return new_df
 
-def main(data, context):
-    """
-    whole process from check the last order, to make api calls until the data is updated, and save that data as a
-    csv file in the bucket while uploading the same data to the orders table in BigQuery
-    """
-    dt = datetime.now()
-    if dt.weekday() == 0:  ##corrected df for dt
-        ## Delete the previous 2 weeks every monday to get rid of the pending
-
-        bq_cl_tmp = bigquery.Client()
-        ## Changed to better select the last order in the previous 2 weeks
-        q_tmp = """
-                -- deleting last 2 weeks get_orders function
-                DELETE `test-bigquery-cc.Shopify.orders_master`
-                Where CAST(order_number as int64) > (
-                    SELECT max(CAST(order_number as int64))
-                    FROM `test-bigquery-cc.Shopify.orders_master`
-                    WHERE created_at < CAST(DATE_SUB(CURRENT_DATE(), INTERVAL 14 DAY) AS TIMESTAMP)
-                    -- today minus 14 days
-                    )
-                """
-        print("cleaning pending orders")
-        try:
-            del_job = bq_cl_tmp.query(q_tmp)  # Make an API request.
-            del_job.result()
-            print("Deleted last 2 weeks of orders")
-        except Exception as err:
-            print(f"Unexpected {err=}, {type(err)=}")
-            print("Couldn'd delete the last 2 weeks orders")
-
-    ## Get data
-    bigquery_client = bigquery.Client()
-
-    ## query select the id correspondig to the last order in the table
-    query = """
-    select distinct id
-    FROM `test-bigquery-cc.Shopify.orders_master`
-    Where CAST(order_number as integer) = (SELECT max(CAST(order_number as integer)) FROM `test-bigquery-cc.Shopify.orders_master`)
-    """
-    ##### previously the max(name) caused problems because it was an string and the max string was #9999 and since then the orders were duplicated
-
-    try:
-        query_job = bigquery_client.query(query)  # Make an API request.
-        rows = query_job.result()  # Waits for query to finish
-        result = list(rows)[0]["id"]  ## last id registered in orders_master table
-
-    except Exception as err:
-        print(f"Unexpected {err=}, {type(err)=}")
-        print("starting from first order")
-        result = 2270011949127
-
-    df = get_all_orders(result)  ## 2270011949127 --> Reference id that works
-
-    if type(df) != type(pd.DataFrame()):
-        return print("No new data to add")
-    # Clean data
-
-    df = refunds(df)  ## new step for the refund column
-
-    df = line_map(df)
-    df = discount_process(df)
-    ## Add time of creation
-    df["UPDATED_FROM_API"] = datetime.utcnow()
-
-    # Change datetime using Series.dt.tz_localize() according to pandas doc
-    # ref https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.astype.html
-
+def type_change(df):
+    deprecated = [
+        "gateway",
+        "cart_token", #### deprecated
+        "checkout_token", #### deprecated
+        "token" #### deprecated
+        ]
     dict_types = {
         "id": "str",
         "buyer_accepts_marketing": "bool",
@@ -354,6 +292,13 @@ def main(data, context):
         "total_discounts":"float64"
     }
 
+    for cols_db in dict_types.keys():
+        if cols_db not in df.columns:
+            if cols_db in deprecated:
+                df[cols_db] = 'DEPRECATED'
+            else:
+                df[cols_db] = None
+
     df = df.astype(dict_types)
     ## Delete nan strings or empty values
     for col in df.columns:
@@ -364,23 +309,20 @@ def main(data, context):
                 df.drop(
                     columns=[col],inplace=True,
                 )
-
-    today_date = date.today().strftime("%Y_%m_%d")
-    file_name = f"SHOPIFY_ORDERS_{today_date}_{result}_RAW.csv"
-
     df["checkout_id"] = df["checkout_id"].apply(lambda x: str(int(float(x)))
-                                                if type(x) == type("") else x)
+                                if type(x) == type("") else x)
+    return df.copy()
 
-    ## getting the stripe confirmation number
+def stripe_process(df):
     try:
         stripe_list = set(df[df["payment_gateway_names"]=="stripe"]["id"])
         transactions = get_transactions(stripe_list)
         df = join_orders_transactions(df,transactions)
-
     except Exception as e:
         print(e)
+    return df.copy()
 
-    ## Upload to BQ
+def upload_to_bq(df,today_date,result):
     try:
         df.to_gbq(
             destination_table=table_name,
@@ -388,6 +330,7 @@ def main(data, context):
             progress_bar=False,
             if_exists="append",
         )  ### should be append
+        print("Data uploaded to BigQuery")
     except Exception as e:
         print(e)
         print("Saving data to bucket")
@@ -396,6 +339,89 @@ def main(data, context):
         file_name = f"SH_problem_data_{today_date}_{result}_RAW.csv"
         blob = bucket.blob(file_name)
         blob.upload_from_string(df.to_csv(index=False), content_type="csv/txt")
+    return
+
+
+def main(data, context):
+    """
+    whole process from check the last order, to make api calls until the data is updated, and save that data as a
+    csv file in the bucket while uploading the same data to the orders table in BigQuery
+    """
+    dt = datetime.now()
+    if dt.weekday() == 0:  ##corrected df for dt
+        ## Delete the previous 2 weeks every monday to get rid of the pending
+
+        bq_cl_tmp = bigquery.Client()
+        ## Changed to better select the last order in the previous 2 weeks
+        q_tmp = """
+                -- deleting last 2 weeks get_orders function
+                DELETE `test-bigquery-cc.Shopify.orders_master`
+                Where CAST(order_number as int64) > (
+                    SELECT max(CAST(order_number as int64))
+                    FROM `test-bigquery-cc.Shopify.orders_master`
+                    WHERE created_at < CAST(DATE_SUB(CURRENT_DATE(), INTERVAL 14 DAY) AS TIMESTAMP)
+                    -- today minus 14 days
+                    )
+                """
+        print("cleaning pending orders")
+        try:
+            del_job = bq_cl_tmp.query(q_tmp)  # Make an API request.
+            del_job.result()
+            print("Deleted last 2 weeks of orders")
+        except Exception as err:
+            print(f"Unexpected {err=}, {type(err)=}")
+            print("Couldn'd delete the last 2 weeks orders")
+
+    ## Get data
+    bigquery_client = bigquery.Client()
+
+    ## query select the id correspondig to the last order in the table
+    query = """
+    select distinct id
+    FROM `test-bigquery-cc.Shopify.orders_master`
+    Where CAST(order_number as integer) = (SELECT max(CAST(order_number as integer)) FROM `test-bigquery-cc.Shopify.orders_master`)
+    """
+    ##### previously the max(name) caused problems because it was an string and the max string was #9999 and since then the orders were duplicated
+
+    try:
+        query_job = bigquery_client.query(query)  # Make an API request.
+        rows = query_job.result()  # Waits for query to finish
+        result = list(rows)[0]["id"]  ## last id registered in orders_master table
+
+    except Exception as err:
+        print(f"Unexpected {err=}, {type(err)=}")
+        print("starting from first order")
+        result = 2270011949127
+
+    df = get_all_orders(result)  ## 2270011949127 --> Reference id that works
+
+    if isinstance(df, pd.DataFrame):
+        return print("No new data to add")
+    # Clean data
+
+    df = refunds(df)  ## new step for the refund column
+    df = line_map(df)
+    df = discount_process(df)
+
+    ## Add time of creation
+    df["UPDATED_FROM_API"] = datetime.utcnow()
+
+    # Change datetime using Series.dt.tz_localize() according to pandas doc
+    # ref https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.astype.html
+
+    df = type_change(df)
+
+    today_date = date.today().strftime("%Y_%m_%d")
+    file_name = f"SHOPIFY_ORDERS_{today_date}_{result}_RAW.csv"
+
+    # df["checkout_id"] = df["checkout_id"].apply(lambda x: str(int(float(x)))
+    #                                             if type(x) == type("") else x)
+
+    ## getting the stripe confirmation number
+
+
+    ## Upload to BQ
+    upload_to_bq(df,today_date,result)
 
     if dt.weekday() == 0:
         print("Saving to bucket last 2 weeks of orders")
