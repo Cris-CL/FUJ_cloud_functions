@@ -20,6 +20,7 @@ project_name = os.environ.get("PROJECT_NAME")
 table_name = os.environ.get("TABLE_NAME")
 shop_name = os.environ.get("STORE_NAME")
 
+
 def get_all_orders(last_order_id):
     """
     Main Function, when provided last_order_id, loops throught all the orders
@@ -76,27 +77,27 @@ def get_all_orders(last_order_id):
             "total-price",
             "total-tax",
             "shipping-address",
-            "total-discounts" ### Added total discounts field
+            "total-discounts",  ### Added total discounts field
         ]
     )
     print(f"First order_id: {last}")
     while True:
-            url = f"https://{apikey}:{password}@{shop_name}.myshopify.com/admin/api/{api_version}/orders.json?limit={limit}&fields={fields}&status={status}&since_id={last}"
-            response_in = requests.get(url)
-            df = pd.json_normalize(response_in.json()["orders"])
+        url = f"https://{apikey}:{password}@{shop_name}.myshopify.com/admin/api/{api_version}/orders.json?limit={limit}&fields={fields}&status={status}&since_id={last}"
+        response_in = requests.get(url)
+        df = pd.json_normalize(response_in.json()["orders"])
 
-            # Function finishes with no new info
-            if len(df) < 1:
-                print("Api didnt provide new data")
-                return last
+        # Function finishes with no new info
+        if len(df) < 1:
+            print("Api didnt provide new data")
+            return last
 
-            orders = pd.concat([orders, df], ignore_index=True)
-            last = df["id"].iloc[-1]
+        orders = pd.concat([orders, df], ignore_index=True)
+        last = df["id"].iloc[-1]
 
-            if len(df) < limit:
-                print(f"Last order_id: {last}")
-                print(len(orders))
-                break
+        if len(df) < limit:
+            print(f"Last order_id: {last}")
+            print(len(orders))
+            break
     return orders
 
 
@@ -186,6 +187,7 @@ def refunds(df):
     df.drop(columns="refunds", inplace=True)
     return df
 
+
 def get_transactions(id_list):
 
     transactions = pd.DataFrame()
@@ -196,37 +198,41 @@ def get_transactions(id_list):
         df = pd.json_normalize(response_in.json()["transactions"][0])
         transactions = pd.concat([transactions, df], ignore_index=True)
 
-    trans_filter = transactions[["order_id","authorization"]]
+    trans_filter = transactions[["order_id", "authorization"]]
     return trans_filter
 
-def join_orders_transactions(orders_df,transactions_df):
-    transactions_df = transactions_df.astype({"order_id":"string"})
+
+def join_orders_transactions(orders_df, transactions_df):
+    transactions_df = transactions_df.astype({"order_id": "string"})
     try:
-        new_df = pd.merge(orders_df,
-                          transactions_df,
-                          left_on="id",
-                          right_on="order_id",
-                          how="left",
-                          validate="many_to_one")
-        new_df['reference'] = new_df['reference'].fillna(new_df['authorization'])
-        new_df = new_df.drop(columns=["order_id","authorization"])
+        new_df = pd.merge(
+            orders_df,
+            transactions_df,
+            left_on="id",
+            right_on="order_id",
+            how="left",
+            validate="many_to_one",
+        )
+        new_df["reference"] = new_df["reference"].fillna(new_df["authorization"])
+        new_df = new_df.drop(columns=["order_id", "authorization"])
 
         assert new_df.shape == orders_df.shape
 
     except Exception as err:
         print(f"Unexpected {err=}, {type(err)=}")
-        print(new_df.shape,orders_df.shape)
+        print(new_df.shape, orders_df.shape)
         new_df = orders_df
 
     return new_df
 
+
 def type_change(df):
     deprecated = [
         "gateway",
-        "cart_token", #### deprecated
-        "checkout_token", #### deprecated
-        "token" #### deprecated
-        ]
+        "cart_token",  #### deprecated
+        "checkout_token",  #### deprecated
+        "token",  #### deprecated
+    ]
     dict_types = {
         "id": "str",
         "buyer_accepts_marketing": "bool",
@@ -289,40 +295,45 @@ def type_change(df):
         "ship_longitude": "float64",
         "ship_country_code": "str",
         "ship_province_code": "str",
-        "total_discounts":"float64"
+        "total_discounts": "float64",
     }
 
     for cols_db in dict_types.keys():
         if cols_db not in df.columns:
             if cols_db in deprecated:
-                df[cols_db] = 'DEPRECATED'
+                df[cols_db] = "DEPRECATED"
             else:
                 df[cols_db] = None
 
     df = df.astype(dict_types)
     ## Delete nan strings or empty values
     for col in df.columns:
-        df[col] = df[col].apply(lambda x: None
-                                if x in ["nan", "", "None", "null"] else x)
+        df[col] = df[col].apply(
+            lambda x: None if x in ["nan", "", "None", "null"] else x
+        )
         if col not in dict_types.keys():
-        ##### dropping columns that shouldnt appear
-                df.drop(
-                    columns=[col],inplace=True,
-                )
-    df["checkout_id"] = df["checkout_id"].apply(lambda x: str(int(float(x)))
-                                if type(x) == type("") else x)
+            ##### dropping columns that shouldnt appear
+            df.drop(
+                columns=[col],
+                inplace=True,
+            )
+    df["checkout_id"] = df["checkout_id"].apply(
+        lambda x: str(int(float(x))) if type(x) == type("") else x
+    )
     return df.copy()
+
 
 def stripe_process(df):
     try:
-        stripe_list = set(df[df["payment_gateway_names"]=="stripe"]["id"])
+        stripe_list = set(df[df["payment_gateway_names"] == "stripe"]["id"])
         transactions = get_transactions(stripe_list)
-        df = join_orders_transactions(df,transactions)
+        df = join_orders_transactions(df, transactions)
     except Exception as e:
         print(e)
     return df.copy()
 
-def upload_to_bq(df,today_date,result):
+
+def upload_to_bq(df, today_date, result):
     try:
         df.to_gbq(
             destination_table=table_name,
@@ -419,9 +430,8 @@ def main(data, context):
 
     ## getting the stripe confirmation number
 
-
     ## Upload to BQ
-    upload_to_bq(df,today_date,result)
+    upload_to_bq(df, today_date, result)
 
     if dt.weekday() == 0:
         print("Saving to bucket last 2 weeks of orders")
