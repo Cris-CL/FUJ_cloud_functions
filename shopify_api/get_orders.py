@@ -172,9 +172,9 @@ def discount_process(df):
 def refund_clean(val):
     tmp = 0
     for x in val:
-        if type(x) == list:
+        if isinstance(x, list):
             continue
-        elif type(x) == dict:
+        elif isinstance(x, dict):
             if len(x.get("refund_line_items", 0)) < 1:
                 continue
             tmp = tmp + float(x.get("refund_line_items", 0)[0].get("subtotal", 0))
@@ -318,7 +318,7 @@ def type_change(df):
                 inplace=True,
             )
     df["checkout_id"] = df["checkout_id"].apply(
-        lambda x: str(int(float(x))) if type(x) == type("") else x
+        lambda x: str(int(float(x))) if isinstance(x, str) else x
     )
     return df.copy()
 
