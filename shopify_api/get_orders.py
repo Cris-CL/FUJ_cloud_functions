@@ -427,7 +427,6 @@ def main(data, context):
     # ref https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.astype.html
     df = type_change(df)
     df = stripe_process(df)
-    # return df
     today_date = date.today().strftime("%Y_%m_%d")
     file_name = f"SHOPIFY_ORDERS_{today_date}_{result}_RAW.csv"
 
