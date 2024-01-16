@@ -16,8 +16,8 @@ api_version = os.environ.get("API_VERSION")
 password = os.environ.get("SHOPIFY_PASS")
 bucket_name = os.environ.get("BUCKET")
 project_name = os.environ.get("PROJECT_NAME")
-table_name = os.environ.get("TABLE_NAME")
-shop_name = os.environ.get("SHOP_NAME")
+table_name = os.environ.get("TABLE_NAME_PAY")
+shop_name = os.environ.get("STORE_NAME")
 
 
 def get_all_payouts(last_order_id):
@@ -104,7 +104,7 @@ def main(data, context):
         result = 0
     df = get_all_payouts(result)  ## 2270011949127 --> Reference id that works
 
-    if type(df) != type(pd.DataFrame()):
+    if not isinstance(df, pd.DataFrame):
         return print("No new data to add")
     # Clean data
 
@@ -118,6 +118,7 @@ def main(data, context):
             "fee": "float64",
             "net": "float64",
             "processed_at": "datetime64[ns]",
+            "adjustment_order_transactions": "str",
         },
     )
 
@@ -126,7 +127,7 @@ def main(data, context):
             lambda x: None if x in ["nan", "", "None", "null", "NaN", "NAN"] else x
         )
         df[col] = df[col].apply(
-            lambda x: x.replace(".0", "") if type(x) == type("") else x
+            lambda x: x.replace(".0", "") if isinstance(x,str) else x
         )
 
     ## Add time of creation
