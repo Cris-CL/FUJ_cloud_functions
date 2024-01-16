@@ -313,7 +313,7 @@ def type_change(df):
             lambda x: None if x in ["nan", "", "None", "null"] else x
         )
         if col not in dict_types.keys():
-    ##### dropping columns that shouldnt appear
+            ##### dropping columns that shouldnt appear
             df.drop(
                 columns=[col],
                 inplace=True,
@@ -330,7 +330,7 @@ def stripe_process(df):
         transactions = get_transactions(stripe_list)
         df = join_orders_transactions(df, transactions)
     except Exception as e:
-        print(e,type(e))
+        print(e, type(e))
         print("Stripe process failed")
     return df.copy()
 
@@ -341,12 +341,12 @@ def upload_to_bq(df, today_date, result):
             destination_table=table_name,
             project_id=project_name,
             progress_bar=False,
-            if_exists="append", ### should be append
+            if_exists="append",  ### should be append
         )
         print("Data uploaded to BigQuery")
     except Exception as e:
         print("Couldn't upload data to BigQuery table, with error:")
-        print(e,type(e))
+        print(e, type(e))
         print("Saving data to bucket")
         storage_client = storage.Client()
         bucket = storage_client.list_buckets().client.bucket(bucket_name)
@@ -410,7 +410,9 @@ def main(data, context):
 
     df = get_all_orders(result)  ## 2270011949127 --> Reference id that works
 
-    if isinstance(df, pd.DataFrame):
+    if not isinstance(
+        df, pd.DataFrame
+    ):  ### if the df is not a dataframe, it means that there is no new data
         return print("No new data to add")
     # Clean data
 
