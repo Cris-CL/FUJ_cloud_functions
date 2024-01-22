@@ -57,13 +57,13 @@ def get_all_orders(last_order_id):
             "order-number",
             "payment-gateway-names",
             "processed-at",
-            "processing-method",
             "reference",
             "source-identifier",
             "source-name",
             "line-items",
             "updated-at",
             # "gateway",
+            # "processing-method", #### deprecated
             # "cart-token", #### deprecated
             # "checkout-token", #### deprecated
             # "token", #### deprecated
@@ -196,9 +196,14 @@ def get_transactions(id_list):
         url = f"https://{apikey}:{password}@{shop_name}.myshopify.com/admin/api/{api_version}/orders/{order_id}/transactions.json"
         response_in = requests.get(url)
         df = pd.json_normalize(response_in.json()["transactions"][0])
+        for row in df.iterrows():
+            for key in row[1].keys():
+                if isinstance(row[1][key],str) and "ch_" in row[1][key] :
+                    df.loc[row[0],"CHARGE_ID_CORRECT"] = row[1][key]
+                    continue
         transactions = pd.concat([transactions, df], ignore_index=True)
 
-    trans_filter = transactions[["order_id", "authorization"]]
+    trans_filter = transactions[["order_id", "CHARGE_ID_CORRECT"]]
     return trans_filter
 
 
@@ -213,8 +218,8 @@ def join_orders_transactions(orders_df, transactions_df):
             how="left",
             validate="many_to_one",
         )
-        new_df["reference"] = new_df["reference"].fillna(new_df["authorization"])
-        new_df = new_df.drop(columns=["order_id", "authorization"])
+        new_df["reference"] = new_df["reference"].fillna(new_df["CHARGE_ID_CORRECT"])
+        new_df = new_df.drop(columns=["order_id", "CHARGE_ID_CORRECT"])
 
         assert new_df.shape == orders_df.shape
 
@@ -233,6 +238,7 @@ def type_change(df):
         "cart_token",  #### deprecated
         "checkout_token",  #### deprecated
         "token",  #### deprecated
+        "processing_method",
     ]
     dict_types = {
         "id": "str",
@@ -331,6 +337,7 @@ def stripe_process(df):
         df = join_orders_transactions(df, transactions)
     except Exception as e:
         print(e, type(e))
+        print(transactions)
         print("Stripe process failed")
     return df.copy()
 
