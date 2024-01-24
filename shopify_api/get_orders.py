@@ -109,6 +109,16 @@ def clean_row(row):
     return row
 
 
+def discount_allocations(item):
+    amount_count = 0
+    for value in item:
+        if isinstance(value, dict):
+            amount_count += int(value.get("amount", 0))
+        else:
+            continue
+    return amount_count
+
+
 def line_map(df):
     ## expand lines for each product
     df = df.explode("line_items").reset_index(drop=True)
@@ -126,7 +136,10 @@ def line_map(df):
     df["lineitem_sku"] = df["line_items"].apply(
         lambda x: x["sku"] if len(x) > 0 else None
     )
-
+    #### discount allocations for each individual product
+    df["lineitem_discount"] = df["line_items"].apply(
+        lambda x: discount_allocations(x["discount_allocations"])
+    )
     ## Cleaning the shipping amounts
     df.columns = [
         col.replace("total_shipping_price_set.", "shipping_") for col in df.columns
@@ -198,8 +211,8 @@ def get_transactions(id_list):
         df = pd.json_normalize(response_in.json()["transactions"][0])
         for row in df.iterrows():
             for key in row[1].keys():
-                if isinstance(row[1][key],str) and "ch_" in row[1][key] :
-                    df.loc[row[0],"CHARGE_ID_CORRECT"] = row[1][key]
+                if isinstance(row[1][key], str) and "ch_" in row[1][key]:
+                    df.loc[row[0], "CHARGE_ID_CORRECT"] = row[1][key]
                     continue
         transactions = pd.concat([transactions, df], ignore_index=True)
 
@@ -230,6 +243,19 @@ def join_orders_transactions(orders_df, transactions_df):
         new_df = orders_df
 
     return new_df
+
+def stripe_process(df):
+    try:
+        stripe_list = set(df[df["payment_gateway_names"] == "stripe"]["id"])
+        if len(stripe_list) < 1:
+            print("No stripe orders")
+            return df
+        transactions = get_transactions(stripe_list)
+        df = join_orders_transactions(df, transactions)
+    except Exception as e:
+        print(e, type(e))
+        print("Stripe process failed")
+    return df.copy()
 
 
 def type_change(df):
@@ -303,6 +329,7 @@ def type_change(df):
         "ship_country_code": "str",
         "ship_province_code": "str",
         "total_discounts": "float64",
+        "lineitem_discount": "float64",
     }
 
     for cols_db in dict_types.keys():
@@ -330,16 +357,6 @@ def type_change(df):
     return df.copy()
 
 
-def stripe_process(df):
-    try:
-        stripe_list = set(df[df["payment_gateway_names"] == "stripe"]["id"])
-        transactions = get_transactions(stripe_list)
-        df = join_orders_transactions(df, transactions)
-    except Exception as e:
-        print(e, type(e))
-        print(transactions)
-        print("Stripe process failed")
-    return df.copy()
 
 
 def upload_to_bq(df, today_date, result):
@@ -362,12 +379,7 @@ def upload_to_bq(df, today_date, result):
         blob.upload_from_string(df.to_csv(index=False), content_type="csv/txt")
     return
 
-
-def main(data, context):
-    """
-    whole process from check the last order, to make api calls until the data is updated, and save that data as a
-    csv file in the bucket while uploading the same data to the orders table in BigQuery
-    """
+def delete_pending_orders():
     dt = datetime.now()
     if dt.weekday() == 0:  ##corrected df for dt
         ## Delete the previous 2 weeks every monday to get rid of the pending
@@ -393,6 +405,9 @@ def main(data, context):
         except Exception as err:
             print(f"Unexpected {err=}, {type(err)=}")
             print("Couldn'd delete the last 2 weeks orders")
+    return
+
+def get_last_order_id():
 
     ## Get data
     bigquery_client = bigquery.Client()
@@ -413,7 +428,17 @@ def main(data, context):
     except Exception as err:
         print(f"Unexpected {err=}, {type(err)=}")
         print("starting from first order")
-        result = 2270011949127
+        # result = 2270011949127
+    return result
+
+def main(data, context):
+    """
+    whole process from check the last order, to make api calls until the data is updated, and save that data as a
+    csv file in the bucket while uploading the same data to the orders table in BigQuery
+    """
+    dt = datetime.now()
+    delete_pending_orders()
+    result = get_last_order_id()
 
     df = get_all_orders(result)  ## 2270011949127 --> Reference id that works
 
@@ -434,6 +459,7 @@ def main(data, context):
     # ref https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.astype.html
     df = type_change(df)
     df = stripe_process(df)
+
     today_date = date.today().strftime("%Y_%m_%d")
     file_name = f"SHOPIFY_ORDERS_{today_date}_{result}_RAW.csv"
 
