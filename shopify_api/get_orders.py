@@ -23,8 +23,17 @@ shop_name = os.environ.get("STORE_NAME")
 
 def get_all_orders(last_order_id):
     """
-    Main Function, when provided last_order_id, loops throught all the orders
-    since that id, and appends them to a dataframe
+    Gets all the orders from the shopify store, and returns a dataframe
+
+    Using the shopify api, loops throught all the orders starting from
+    last_order_id, and returns a pandas dataframe with all the orders parameters
+    contained in the fields variable
+
+    Parameters:
+    - last_order_id (int): The last order id that was registered in the database
+
+    Returns:
+    - orders (pd.DataFrame): A dataframe with all the orders from the shopify store
     """
 
     last = last_order_id  ##first order_id 2270011949127
@@ -102,6 +111,14 @@ def get_all_orders(last_order_id):
 
 
 def clean_row(row):
+    """
+    Cleans a row from a dataframe, removing unwanted characters
+
+    Parameters:
+    - row (str): A string that contains unwanted characters
+    Returns:
+    - row (str): The same string, but without unwanted characters
+    """
     signs = "{}[]'"
     row = str(row)
     for sign in signs:
@@ -110,6 +127,15 @@ def clean_row(row):
 
 
 def discount_allocations(item):
+    """
+    Iterates through a list of dictionaries, and returns the sum of the amount field
+
+    Parameters:
+    - item (list): A list of dictionaries
+
+    Returns:
+    - amount_count (int): The sum of the amount field in the list of dictionaries
+    """
     amount_count = 0
     for value in item:
         if isinstance(value, dict):
@@ -120,6 +146,20 @@ def discount_allocations(item):
 
 
 def line_map(df):
+    """
+    Expands the line_items column into multiple columns, and cleans the shipping amounts
+
+    Takes a dataframe with the column line_items that came from the shopify orders api
+    and expands the dataframe to create new rows depending on the amount of items on each
+    order, after that process the relevant columns inside the line_items columnsba
+
+    Parameters:
+    - df (pd.DataFrame): A dataframe with a column called line_items
+
+    Returns:
+    - df (pd.DataFrame): The same dataframe, but with the line_items column expanded into multiple columns
+
+    """
     ## expand lines for each product
     df = df.explode("line_items").reset_index(drop=True)
 
@@ -158,6 +198,16 @@ def line_map(df):
 
 
 def discount_process(df):
+    """
+    Extracts information from the discount_codes column, creating new columns
+
+    Parameters:
+    - df (pd.DataFrame): A dataframe with a column called discount_codes
+
+    Returns:
+    - df (pd.DataFrame): The same dataframe, but with new columns extracted from the discount_codes column
+
+    """
 
     df["discount_code"] = df["discount_codes"].apply(
         lambda x: x[0]["code"] if len(x) > 0 else None
@@ -183,6 +233,16 @@ def discount_process(df):
 
 
 def refund_clean(val):
+    """
+    Iterates through a list of dictionaries, and returns the sum of the subtotal field
+
+    Parameters:
+    val (list): A list of dictionaries
+
+    Returns:
+    tmp (int): The sum of the subtotal field in the list of dictionaries
+    """
+
     tmp = 0
     for x in val:
         if isinstance(x, list):
@@ -190,11 +250,22 @@ def refund_clean(val):
         elif isinstance(x, dict):
             if len(x.get("refund_line_items", 0)) < 1:
                 continue
-            tmp = tmp + float(x.get("refund_line_items", 0)[0].get("subtotal", 0))
+            # tmp = tmp + float(x.get("refund_line_items", 0)[0].get("subtotal", 0))
+            tmp += sum([float(part.get("subtotal", 0)) for part in x.get("refund_line_items", {})])
     return tmp
 
 
 def refunds(df):
+    """
+    Extracts information from the refunds column, creating a new column and dropping the original one
+
+    Parameters:
+    - df (pd.DataFrame): A dataframe with a column called refunds
+
+    Returns:
+    - df (pd.DataFrame): The same dataframe, but with a new column extracted from the refunds column
+    """
+
 
     df["refund"] = df["refunds"].map(lambda x: refund_clean(x) if len(x) > 0 else 0)
     df.drop(columns="refunds", inplace=True)
@@ -202,6 +273,19 @@ def refunds(df):
 
 
 def get_transactions(id_list):
+    """
+    Gets all the transactions from the shopify store, and returns a dataframe
+
+    Using the shopify api, loops throught all the transactions with the order_id
+    in the id_list that correspond to the orders processed in stripe,
+    and returns a pandas dataframe with all the transactions parameters
+
+    Parameters:
+    - id_list (list): A list with all the order ids that were processed in stripe
+
+    Returns:
+    - trans_filter (pd.DataFrame): A dataframe with all the stripe transactions
+    """
 
     transactions = pd.DataFrame()
     for order_id in set(id_list):
@@ -221,6 +305,21 @@ def get_transactions(id_list):
 
 
 def join_orders_transactions(orders_df, transactions_df):
+    """
+    Join the orders dataframe with the transactions dataframe, and returns a new dataframe
+
+    After getting the orders and transactions dataframes, this function merges them
+    so the orders df has the charge_id from the transactions df for the stripe orders
+
+    Parameters:
+    - orders_df (pd.DataFrame): A dataframe with all the orders from the shopify store
+    - transactions_df (pd.DataFrame): A dataframe with all the stripe transactions
+
+    Returns:
+    - new_df (pd.DataFrame): A dataframe with all the orders from the shopify store, with the charge_id for the stripe orders
+
+    """
+
     transactions_df = transactions_df.astype({"order_id": "string"})
     try:
         new_df = pd.merge(
@@ -245,6 +344,16 @@ def join_orders_transactions(orders_df, transactions_df):
     return new_df
 
 def stripe_process(df):
+    """
+    Process the stripe orders, and returns the processed dataframe
+
+    Parameters:
+    - df (pd.DataFrame): A dataframe with all the orders from the shopify store
+
+    Returns:
+    - df (pd.DataFrame): The same dataframe, but with the stripe orders processed
+    """
+
     try:
         stripe_list = set(df[df["payment_gateway_names"] == "stripe"]["id"])
         if len(stripe_list) < 1:
@@ -259,6 +368,18 @@ def stripe_process(df):
 
 
 def type_change(df):
+    """"
+    Changes the type of the columns in the dataframe, and returns the processed dataframe
+
+    This function changes the type of the columns in the dataframe to the
+    correct type to allow the data to be uploaded to BigQuery
+
+    Parameters:
+    - df (pd.DataFrame): A dataframe with all the orders from the shopify store
+    Returns:
+    - df (pd.DataFrame): The same dataframe, but with the columns changed to the correct type
+
+    """
     deprecated = [
         "gateway",
         "cart_token",  #### deprecated
@@ -360,6 +481,21 @@ def type_change(df):
 
 
 def upload_to_bq(df, today_date, result):
+    """"
+    Uploads the dataframe to BigQuery
+
+    This function uploads the dataframe to BigQuery, and if it fails,
+    it saves the dataframe to a csv file in the bucket
+
+    Parameters:
+    - df (pd.DataFrame): A dataframe with all the orders from the shopify store
+    - today_date (str): The current date
+    - result (int): The last order id that was registered in the database
+
+    Returns:
+    - None
+    """
+
     try:
         df.to_gbq(
             destination_table=table_name,
@@ -380,6 +516,17 @@ def upload_to_bq(df, today_date, result):
     return
 
 def delete_pending_orders():
+    """"
+    Deletes the pending orders from the BigQuery table
+
+    This function deletes the pending orders from the BigQuery table every monday
+
+    Parameters:
+    - None
+    Returns:
+    - None
+    """
+
     dt = datetime.now()
     if dt.weekday() == 0:  ##corrected df for dt
         ## Delete the previous 2 weeks every monday to get rid of the pending
@@ -408,6 +555,16 @@ def delete_pending_orders():
     return
 
 def get_last_order_id():
+    """
+    Gets the last order id from the BigQuery table
+
+    Parameters:
+    - None
+
+    Returns:
+    - result (int): The last order id that was registered in the database
+
+    """
 
     ## Get data
     bigquery_client = bigquery.Client()
