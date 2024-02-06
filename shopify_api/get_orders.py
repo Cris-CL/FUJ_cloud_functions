@@ -429,6 +429,7 @@ def get_last_order_id():
         print(f"Unexpected {err=}, {type(err)=}")
         print("starting from first order")
         # result = 2270011949127
+        result = 9999999999999
     return result
 
 def main(data, context):
