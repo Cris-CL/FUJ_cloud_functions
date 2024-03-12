@@ -2,3 +2,7 @@
 .txt
 util/
 __pycache__/
+compose-dev.yaml
+.env
+*.ipynb
+notebooks/
