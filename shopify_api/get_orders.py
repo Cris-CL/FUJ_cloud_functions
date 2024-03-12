@@ -93,7 +93,12 @@ def get_all_orders(last_order_id):
     while True:
         url = f"https://{apikey}:{password}@{shop_name}.myshopify.com/admin/api/{api_version}/orders.json?limit={limit}&fields={fields}&status={status}&since_id={last}"
         response_in = requests.get(url)
-        df = pd.json_normalize(response_in.json()["orders"])
+        try:
+            df = pd.json_normalize(response_in.json()["orders"])
+        except Exception as e:
+            print("get_all_orders failed with error:")
+            print(e,type(e))
+            return pd.DataFrame()
 
         # Function finishes with no new info
         if len(df) < 1:
@@ -600,9 +605,9 @@ def main(data, context):
 
     df = get_all_orders(result)  ## 2270011949127 --> Reference id that works
 
-    if not isinstance(
-        df, pd.DataFrame
-    ):  ### if the df is not a dataframe, it means that there is no new data
+    if not isinstance(df, pd.DataFrame):  ### if the df is not a dataframe, it means that there is no new data
+        return print("No new data to add")
+    elif len(df) < 1:
         return print("No new data to add")
     # Clean data
 
