@@ -1,15 +1,41 @@
 import pandas as pd
 from google.cloud import bigquery
+from datetime import datetime
 
+def get_settlement_end_date(df_base):
+    try:
+        for i in range(len(df_base)):
+            if 'SettlementEndDate' in df_base.iloc[i][0]:
+                endate = df_base.iloc[i][0].split(",")[1].replace('"','')
+                break
+        print(endate)
+    except Exception as e:
+        print(e)
+        endate = None
+    return endate
 
-
-
+def get_cut_index(df_base):
+    try:
+        for i in range(len(df_base)):
+            if 'TransactionPostedDate' in df_base.iloc[i][0]:
+                cut_index = i
+                break
+    except Exception as e:
+        print(e)
+        cut_index = 4
+    return cut_index
 
 def clean_txt(file):
     """function that takes a path to the txt file as an argument and returns
     a cleaned version of it as a pandas Dataframe"""
     pay_df = pd.read_table(file)
-    new_pay = pay_df.iloc[4:,:].reset_index(drop=True)
+
+    end_date = get_settlement_end_date(pay_df)
+    cut_index = get_cut_index(pay_df)
+    file_name = file.split("/")[-1]
+
+    new_pay = pay_df.iloc[cut_index:,:].reset_index(drop=True)
+
     new_pay = new_pay[new_pay.columns[0]].str.split(',"', expand=True)
     for col in new_pay.columns:
         new_pay[col] = new_pay[col].apply(
@@ -21,15 +47,18 @@ def clean_txt(file):
     new_pay = new_pay.iloc[1:,:].reset_index(drop=True)
     new_pay.columns = [x.replace(",","").lower() for x in list(new_pay.columns)]
     cols = [
-    "transactionamount",
-    "transactionpercentagefee",
-    "transactionfixedfee",
-    "totaltransactionfee",
-    "nettransactionamount"
+        "transactionamount",
+        "transactionpercentagefee",
+        "transactionfixedfee",
+        "totaltransactionfee",
+        "nettransactionamount"
         ]
     for num_col in cols:
         new_pay[num_col] = new_pay[num_col].apply(lambda x: x.replace(",","").replace(".00",""))
 
+    new_pay["settlement_end_date"] = end_date
+    new_pay["FILE_NAME"] = file_name
+    new_pay["UPDATED_AT"] = datetime.now()
 
     new_pay = new_pay.astype({
         "transactionposteddate":"datetime64[ns]",
@@ -49,6 +78,11 @@ def clean_txt(file):
         "transactionfixedfee":"float64",
         "totaltransactionfee":"float64",
         "nettransactionamount":"float64",
+
+        "settlement_end_date":"datetime64[ns]",
+        "FILE_NAME":"string",
+        "UPDATED_AT":"datetime64[ns]",
+
     })
 
     return new_pay
