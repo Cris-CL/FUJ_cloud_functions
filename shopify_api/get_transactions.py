@@ -133,7 +133,7 @@ def main(data, context):
             lambda x: None if x in ["nan", "", "None", "null", "NaN", "NAN"] else x
         )
         df[col] = df[col].apply(
-            lambda x: x.replace(".0", "") if isinstance(x, str) else x
+            lambda x: x.replace(".0", "") if isinstance(x,str) else x
         )
 
     ## Add time of creation
