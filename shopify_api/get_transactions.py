@@ -62,14 +62,18 @@ def main(data, context):
 
     query_0 = f"""
     DELETE
+        `{project_name}.Shopify.{table_name}`
+    WHERE
+        CAST(id as INTEGER) >= (
+    SELECT
+        MIN(CAST(id as INTEGER))
     FROM
         `{project_name}.Shopify.{table_name}`
     WHERE
-    cast(id as INTEGER) >= (
-    SELECT
-        min(cast(id as INTEGER))
-    FROM `{project_name}.Shopify.{table_name}`
-    WHERE payout_status = 'pending')
+        payout_status = 'pending'
+    OR
+        payout_status = 'in_transit'
+    )
     """
 
     try:
@@ -82,16 +86,18 @@ def main(data, context):
 
     ## query select the id correspondig to the last order in the table
     query = f"""
+    ------ QUERY to get the max id in the payments data, after deleting the
+    ------ pending or in transit transactions
     SELECT
-    DISTINCT id
+        MAX(CAST(id AS INT64)) AS id
     FROM
     `{project_name}.Shopify.{table_name}`
-    WHERE
-    CAST(id AS INTEGER) = (
-    SELECT
-        MAX(CAST(id AS INTEGER))
-    FROM
-    `{project_name}.Shopify.{table_name}`)
+    ------  WHERE
+    ------  CAST(id AS INTEGER) = (
+    ------  SELECT
+    ------      MAX(CAST(id AS INTEGER))
+    ------  FROM
+    ------  `{project_name}.Shopify.{table_name}`)
     """
 
     try:
@@ -127,7 +133,7 @@ def main(data, context):
             lambda x: None if x in ["nan", "", "None", "null", "NaN", "NAN"] else x
         )
         df[col] = df[col].apply(
-            lambda x: x.replace(".0", "") if isinstance(x, str) else x
+            lambda x: x.replace(".0", "") if isinstance(x,str) else x
         )
 
     ## Add time of creation
