@@ -4,9 +4,11 @@
 # google-cloud-storage>=2.5.0
 
 import os
+from datetime import datetime
 import pandas as pd
 from google.cloud import bigquery,storage
 import functions_framework
+from dict_utils_ama import data_types
 
 table_1 = os.environ.get('TABLE_1')
 table_2 = os.environ.get('TABLE_2')
@@ -30,66 +32,6 @@ def classify_dict(year):
         },
     }
     return rep_classifier
-data_types = {
-    'tv':{
-        'settlement_id': 'float',
-        'settlement_start_date': 'datetime64',
-        'settlement_end_date': 'datetime64',
-        'deposit_date': 'datetime64',
-        'total_amount': 'float',
-        'currency': 'str',
-        'transaction_type': 'str',
-        'order_id': 'str',
-        'merchant_order_id': 'str',
-        'adjustment_id': 'str',
-        'shipment_id': 'str',
-        'marketplace_name': 'str',
-        'amount_type': 'str',
-        'amount_description': 'str',
-        'amount': 'float',
-        'fulfillment_id': 'str',
-        'posted_date': 'datetime64',
-        'posted_date_time': 'datetime64',
-        'order_item_code': 'str',
-        'merchant_order_item_id': 'str',
-        'merchant_adjustment_item_id': 'float',
-        'sku': 'str',
-        'quantity_purchased': 'float',
-        'promotion_id': 'str'
-    },
-    'oc':{
-        "amazon_order_id": "str",
-        "merchant_order_id": "str",
-        "purchase_date": "datetime64",
-        "last_updated_date": "datetime64",
-        "order_status": "str",
-        "fulfillment_channel": "str",
-        "sales_channel": "str",
-        "order_channel": "str",
-        "url": "str",
-        "ship_service_level": "str",
-        "product_name": "str",
-        "sku": "str",
-        "asin": "str",
-        "item_status": "str",
-        "quantity": "int64",
-        "currency": "str",
-        "item_price": "float",
-        "item_tax": "float",
-        "shipping_price": "float",
-        "shipping_tax": "float",
-        "gift_wrap_price": "float",
-        "gift_wrap_tax": "float",
-        "item_promotion_discount": "float",
-        "ship_promotion_discount": "float",
-        "ship_city": "str",
-        "ship_state": "str",
-        "ship_postal_code": "str",
-        "ship_country": "str",
-        "promotion_ids": "str",
-    }
-}
-
 
 def get_list_reports(dataset,table):
     """
@@ -98,13 +40,13 @@ def get_list_reports(dataset,table):
 
     client = bigquery.Client()
 
-    query = f"""SELECT DISTINCT file
+    query = f"""SELECT DISTINCT FILE_NAME
             FROM `{dataset}.{table}`"""
 
     query_job = client.query(query)
 
     rows = query_job.result()
-    list_reports_uploaded = [row.file for row in rows]
+    list_reports_uploaded = [row.FILE_NAME for row in rows]
 
     return list_reports_uploaded
 
@@ -171,9 +113,9 @@ def amazon_process(cloud_event):
         destination_blob_name = f'{folder_name}/{new_name}'
         move_blob(bucket_name, blob_name, destination_bucket_name, destination_blob_name)
 
-    ## TODO process in this case (deleting old data and replace with new)
-
+        ## TODO process in this case (deleting old data and replace with new)
         return print("finish whitout changes,file moved to repeated_files folder")
+
     ## Rename columns
     df.columns = df.columns.map(lambda x: x.lower().strip().replace("-","_"))
 
@@ -184,13 +126,14 @@ def amazon_process(cloud_event):
         df[col] = df[col].map(
             lambda x: None if type(x) == type("") and x in ["nan","NaN","NAN","Null","null",""] else x
             )
-    df[['file']] = name
+    df[['FILE_NAME']] = name
+    df[['UPLOADED_DATETIME']] = datetime.now()
 
     #### UPLOAD TO BQ
     print("Uploading start")
     table_id = f'{project}.{dataset}.{rep_classifier[report_type]["destination_table"]}'
 
-    dtypes_dict = {
+    dtypes_tobq = {
 
         "object": "STRING",
         "int64": "INTEGER",
@@ -202,7 +145,7 @@ def amazon_process(cloud_event):
     job_config = bigquery.LoadJobConfig(
     schema=[
         eval(
-            f"bigquery.SchemaField('{col}', bigquery.enums.SqlTypeNames.{dtypes_dict[str(df[col].dtypes)]})"
+            f"bigquery.SchemaField('{col}', bigquery.enums.SqlTypeNames.{dtypes_tobq[str(df[col].dtypes)]})"
         ) for col in df.columns
     ]
     ,
