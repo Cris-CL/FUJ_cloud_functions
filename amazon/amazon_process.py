@@ -15,19 +15,21 @@ project = os.environ.get('PROJECT_ID')
 new_bucket = os.environ.get('NEW_BUCKET')
 
 
-year = '2023' #### Changed year to current one
-rep_classifier = {
-    'tv':{
-        'destination_table':table_2,
-        'prefix':'TV',
-        'folder':f'transaction_view/settlement_{year}' ### Modify year when it changes
+# year = '2023' #### Changed year to current one
+def classify_dict(year):
+    rep_classifier = {
+        'tv':{
+            'destination_table':table_2,
+            'prefix':'TV',
+            'folder':f'transaction_view/settlement_{year}' ### Modify year when it changes
+            },
+        'oc':{
+            'destination_table':table_1,
+            'prefix':'OC',
+            'folder':f'order_central/sales_{year}' ### Modify year when it changes
         },
-    'oc':{
-        'destination_table':table_1,
-        'prefix':'OC',
-        'folder':f'order_central/sales_{year}' ### Modify year when it changes
-    },
-}
+    }
+    return rep_classifier
 data_types = {
     'tv':{
         'settlement_id': 'float',
@@ -135,6 +137,9 @@ def amazon_process(cloud_event):
     event_type = cloud_event["type"]
     bucket = data["bucket"]
     name = data["name"]
+    year_report = name[:4]
+
+    rep_classifier = classify_dict(year_report)
 
     ## URI from uploaded file to be loaded
     uri = f"gs://{bucket}/{name}"
