@@ -3,6 +3,8 @@
 # google-cloud-storage==1.44.0
 # google-cloud-bigquery>=3.3.5
 # pandas-gbq>=0.17.9
+# numpy==1.23.4
+# ShopifyAPI==12.5.0
 
 import os
 import requests
@@ -10,14 +12,15 @@ import pandas as pd
 from google.cloud import bigquery
 from google.cloud import storage
 from datetime import datetime, date
+import shopify
 
-apikey = os.environ.get("SHOPIFY_KEY")
-api_version = os.environ.get("API_VERSION")
-password = os.environ.get("SHOPIFY_PASS")
-bucket_name = os.environ.get("BUCKET")
-project_name = os.environ.get("PROJECT_NAME")
-table_name = os.environ.get("TABLE_NAME_PAY")
-shop_name = os.environ.get("STORE_NAME")
+SHOPIFY_KEY = os.environ.get("SHOPIFY_KEY")
+API_VERSION = os.environ.get("API_VERSION")
+SHOPIFY_PASS = os.environ.get("SHOPIFY_PASS")
+BUCKET = os.environ.get("BUCKET")
+PROJECT_NAME = os.environ.get("PROJECT_NAME")
+TABLE_NAME_PAY = os.environ.get("TABLE_NAME_PAY_PAY")
+STORE_NAME = os.environ.get("STORE_NAME")
 
 
 def get_all_payouts(last_order_id):
@@ -34,7 +37,7 @@ def get_all_payouts(last_order_id):
 
     print(f"First order_id: {last}")
     while True:
-        url = f"https://{apikey}:{password}@{shop_name}.myshopify.com/admin/api/{api_version}/shopify_payments/balance/transactions.json?limit={limit}&since_id={last}"
+        url = f"https://{SHOPIFY_KEY}:{SHOPIFY_PASS}@{STORE_NAME}.myshopify.com/admin/api/{API_VERSION}/shopify_payments/balance/transactions.json?limit={limit}&since_id={last}"
         response_in = requests.get(url)
         df = pd.json_normalize(response_in.json()["transactions"])
 
@@ -52,6 +55,19 @@ def get_all_payouts(last_order_id):
             break
     return transactions
 
+def get_new_payouts(last_id):
+    shop_url = f"https://{API_KEY}:{SHOPIFY_PASS}@fuji-organics.myshopify.com/admin/api/{API_VERSION}/"
+    shopify.ShopifyResource.set_site(shop_url)
+    shop = shopify.Shop.current
+    limit_payout = 250
+    payouts_response = shopify.Balance.get(
+        limit=limit_payout,
+        since_id=last_id,
+        method_name="transactions"
+        )
+    payout_df = pd.DataFrame(payouts_response)
+
+    return payout_df
 
 def main(data, context):
     """
@@ -62,13 +78,13 @@ def main(data, context):
 
     query_0 = f"""
     DELETE
-        `{project_name}.Shopify.{table_name}`
+        `{PROJECT_NAME}.Shopify.{TABLE_NAME_PAY}`
     WHERE
         CAST(id as INTEGER) >= (
     SELECT
         MIN(CAST(id as INTEGER))
     FROM
-        `{project_name}.Shopify.{table_name}`
+        `{PROJECT_NAME}.Shopify.{TABLE_NAME_PAY}`
     WHERE
         payout_status = 'pending'
     OR
@@ -91,13 +107,13 @@ def main(data, context):
     SELECT
         MAX(CAST(id AS INT64)) AS id
     FROM
-    `{project_name}.Shopify.{table_name}`
+    `{PROJECT_NAME}.Shopify.{TABLE_NAME_PAY}`
     ------  WHERE
     ------  CAST(id AS INTEGER) = (
     ------  SELECT
     ------      MAX(CAST(id AS INTEGER))
     ------  FROM
-    ------  `{project_name}.Shopify.{table_name}`)
+    ------  `{PROJECT_NAME}.Shopify.{TABLE_NAME_PAY}`)
     """
 
     try:
@@ -144,8 +160,8 @@ def main(data, context):
 
     ## Upload to BQ
     df.to_gbq(
-        destination_table=f"Shopify.{table_name}",
-        project_id=project_name,
+        destination_table=f"Shopify.{TABLE_NAME_PAY}",
+        project_id=PROJECT_NAME,
         progress_bar=False,
         if_exists="append",
     )  ### should be append
@@ -153,7 +169,7 @@ def main(data, context):
     ## Upload to bucket
 
     storage_client = storage.Client()
-    bucket = storage_client.list_buckets().client.bucket(bucket_name)
+    bucket = storage_client.list_buckets().client.bucket(BUCKET)
     blob = bucket.blob(file_name)
     blob.upload_from_string(df.to_csv(index=False), content_type="csv/txt")
     return
