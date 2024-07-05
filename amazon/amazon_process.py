@@ -10,23 +10,22 @@ from google.cloud import bigquery,storage
 import functions_framework
 from dict_utils_ama import data_types
 
-table_1 = os.environ.get('TABLE_1')
-table_2 = os.environ.get('TABLE_2')
-dataset = os.environ.get('DATASET_ID')
-project = os.environ.get('PROJECT_ID')
-new_bucket = os.environ.get('NEW_BUCKET')
+TABLE_1 = os.environ.get('TABLE_1')
+TABLE_2 = os.environ.get('TABLE_2')
+DATASET_ID = os.environ.get('DATASET_ID')
+PROJECT_ID = os.environ.get('PROJECT_ID')
+NEW_BUCKET = os.environ.get('NEW_BUCKET')
 
 
-# year = '2023' #### Changed year to current one
 def classify_dict(year):
     rep_classifier = {
         'tv':{
-            'destination_table':table_2,
+            'destination_table':TABLE_2,
             'prefix':'TV',
             'folder':f'transaction_view/settlement_{year}' ### Modify year when it changes
             },
         'oc':{
-            'destination_table':table_1,
+            'destination_table':TABLE_1,
             'prefix':'OC',
             'folder':f'order_central/sales_{year}' ### Modify year when it changes
         },
@@ -40,8 +39,7 @@ def get_list_reports(dataset,table):
 
     client = bigquery.Client()
 
-    query = f"""SELECT DISTINCT FILE_NAME
-            FROM `{dataset}.{table}`"""
+    query = f"""SELECT DISTINCT FILE_NAME FROM `{DATASET_ID}.{table}`"""
 
     query_job = client.query(query)
 
@@ -64,6 +62,21 @@ def move_blob(bucket_name, blob_name, destination_bucket_name, destination_blob_
     )
     source_bucket.delete_blob(blob_name)
 
+def load_dataframe(uri):
+    df = pd.DataFrame()
+    report_type = ''
+    try:
+        df = pd.read_table(uri)
+        report_type = 'tv'
+        print(report_type)
+    except:
+        df = pd.read_table(uri,encoding="ms932")
+        report_type = 'oc'
+        print(report_type)
+    # else:
+    #     print("Something wrong")
+    #     return []
+    return [df,report_type]
 
 # Triggered by a change in a storage bucket
 @functions_framework.cloud_event
@@ -85,19 +98,14 @@ def amazon_process(cloud_event):
 
     ## URI from uploaded file to be loaded
     uri = f"gs://{bucket}/{name}"
-    try:
-        df = pd.read_table(uri)
-        report_type = 'tv'
-        print(report_type)
-    except:
-        df = pd.read_table(uri,encoding="ms932")
-        report_type = 'oc'
-        print(report_type)
+    data_report = load_dataframe(uri)
 
+    df = data_report[0]
+    report_type = data_report[1]
+    rep_destination = rep_classifier[report_type]
 
-    rep_dest = rep_classifier[report_type]
     try:
-        list_uploaded = get_list_reports(dataset,rep_dest["destination_table"])
+        list_uploaded = get_list_reports(DATASET_ID,rep_destination["destination_table"])
     except:
         print("Error in the query, the file will be uploaded")
         list_uploaded = []
@@ -107,7 +115,7 @@ def amazon_process(cloud_event):
 
         bucket_name = bucket
         blob_name = name
-        destination_bucket_name = new_bucket
+        destination_bucket_name = NEW_BUCKET
         folder_name = f'Amazon/repeated_files'
         new_name = f'{rep_classifier[report_type]["prefix"]}_{blob_name}'
         destination_blob_name = f'{folder_name}/{new_name}'
@@ -126,12 +134,13 @@ def amazon_process(cloud_event):
         df[col] = df[col].map(
             lambda x: None if type(x) == type("") and x in ["nan","NaN","NAN","Null","null",""] else x
             )
+
     df[['FILE_NAME']] = name
     df[['UPLOADED_DATETIME']] = datetime.now()
 
     #### UPLOAD TO BQ
     print("Uploading start")
-    table_id = f'{project}.{dataset}.{rep_classifier[report_type]["destination_table"]}'
+    table_id = f'{PROJECT_ID}.{DATASET_ID}.{rep_classifier[report_type]["destination_table"]}'
 
     dtypes_tobq = {
 
@@ -163,7 +172,7 @@ def amazon_process(cloud_event):
 
     bucket_name = bucket
     blob_name = name
-    destination_bucket_name = new_bucket
+    destination_bucket_name = NEW_BUCKET
     folder_name = f'Amazon/{rep_classifier[report_type]["folder"]}'
     new_name = f'{rep_classifier[report_type]["prefix"]}_{blob_name}'
     destination_blob_name = f'{folder_name}/{new_name}'
