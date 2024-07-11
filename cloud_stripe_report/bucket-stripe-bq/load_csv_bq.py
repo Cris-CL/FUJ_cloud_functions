@@ -17,23 +17,6 @@ file_classifier = {
     'AMA':'fujiorg-sales-data/Shopify/amazon_pay/',
 }
 
-# def move_blob(origin_bucket_name, origin_blob_name, destination_bucket_name, destination_blob_name):
-#     """Moves a blob from one bucket to another with a new name."""
-#     from google.cloud import storage
-
-#     storage_client = storage.Client()
-
-#     source_bucket = storage_client.bucket(origin_bucket_name)
-#     source_blob = source_bucket.blob(origin_blob_name)
-#     destination_bucket = storage_client.bucket(destination_bucket_name)
-
-#     blob_copy = source_bucket.copy_blob(
-#         source_blob, destination_bucket, destination_blob_name
-#     )
-#     source_bucket.delete_blob(origin_blob_name)
-# return
-
-
 
 def stripe_csv_bq(uri,table_id,job_config):
     client = bigquery.Client()
@@ -154,7 +137,12 @@ def upload_stripe_bq(cloud_event):
 
         filename = f'Shopify/amazon_pay/{year}/{ama_file_name}.csv'
         storage_client = storage.Client()
-        bucket = storage_client.list_buckets().client.bucket('fujiorg-sales-data')
-        blob = bucket.blob(filename)
+        bucket_ama = storage_client.list_buckets().client.bucket('fujiorg-sales-data')
+        blob = bucket_ama.blob(filename)
         blob.upload_from_string(df_ama.to_csv(index = False),content_type = 'csv')
+        try:
+            source_bucket = storage_client.bucket(bucket)
+            source_bucket.delete_blob(name)
+        except Exception as e:
+            print(e,type(e))
         return
