@@ -1,275 +1,160 @@
 # functions-framework==3.*
-# pandas==1.5.1
 # google-cloud-bigquery>=3.3.5
 # google-cloud-storage>=2.5.0
+# pandas==1.5.1
 # fsspec==2022.11.0
 # gcsfs==2022.11.0
 # pyarrow==9.0.0
 
+
 import os
-import pandas as pd
-from google.cloud import bigquery,storage
 import functions_framework
+from google.cloud import bigquery,storage
 
-table_1 = os.environ.get('TABLE_1')
-table_2 = os.environ.get('TABLE_2')
-dataset = os.environ.get('DATASET_ID')
-project = os.environ.get('PROJECT_ID')
-new_bucket = os.environ.get('NEW_BUCKET')
-
-
-year = '2024' #### Changed year to current one
-rep_classifier = {
-    'tv':{
-        'destination_table':table_2,
-        'prefix':'TV',
-        'folder':f'transaction_view/settlement_{year}' ### Modify year when it changes
-        },
-    'oc':{
-        'destination_table':table_1,
-        'prefix':'OC',
-        'folder':f'order_central/sales_{year}' ### Modify year when it changes
-    },
-}
-data_types = {
-    'tv':{
-        'settlement_id': 'float',
-        'total_amount': 'float',
-        'currency': 'str',
-        'transaction_type': 'str',
-        'order_id': 'str',
-        'merchant_order_id': 'str',
-        'adjustment_id': 'str',
-        'shipment_id': 'str',
-        'marketplace_name': 'str',
-        'amount_type': 'str',
-        'amount_description': 'str',
-        'amount': 'float',
-        'fulfillment_id': 'str',
-        'order_item_code': 'str',
-        'merchant_order_item_id': 'str',
-        'merchant_adjustment_item_id': 'float',
-        'sku': 'str',
-        'quantity_purchased': 'float',
-        "promotion_id":"str"
-
-    },
-    'oc':{
-        "amazon_order_id": "str",
-        "merchant_order_id": "str",
-        "order_status": "str",
-        "fulfillment_channel": "str",
-        "sales_channel": "str",
-        "order_channel": "str",
-        "url": "str",
-        "ship_service_level": "str",
-        "product_name": "str",
-        "sku": "str",
-        "asin": "str",
-        "item_status": "str",
-        "quantity": "int64",
-        "currency": "str",
-        "item_price": "float",
-        "item_tax": "float",
-        "shipping_price": "float",
-        "shipping_tax": "float",
-        "gift_wrap_price": "float",
-        "gift_wrap_tax": "float",
-        "item_promotion_discount": "float",
-        "ship_promotion_discount": "float",
-        "ship_city": "str",
-        "ship_state": "str",
-        "ship_postal_code": "str",
-        "ship_country": "str",
-        "promotion_ids":"str"
-    }
+file_classifier = {
+    'PAY':'fujiorg-sales-data/Shopify/stripe/payments/',
+    'BAL':'fujiorg-sales-data/Shopify/stripe/balance/',
+    'AMA':'fujiorg-sales-data/Shopify/amazon_pay/',
 }
 
-datetime_format = {
-    'tv':'%d.%m.%Y %H:%M:%S %Z',
-    'oc':'%Y-%m-%dT%H:%M:%S%z'
-    }
-date_format = '%d.%m.%Y'
+# def move_blob(origin_bucket_name, origin_blob_name, destination_bucket_name, destination_blob_name):
+#     """Moves a blob from one bucket to another with a new name."""
+#     from google.cloud import storage
 
-datetime_columns = {
-    'tv': [
-        'settlement_start_date', # datetime
-        'settlement_end_date', # datetime
-        'deposit_date', # datetime
-        'posted_date', # date
-        'posted_date_time', # datetime
-        ]
-    ,
-    'oc': [
-        "purchase_date",
-        "last_updated_date",
-        ]
-}
-date_columns = {
-    'tv':[
-        'posted_date'
-        ]
-    }
+#     storage_client = storage.Client()
+
+#     source_bucket = storage_client.bucket(origin_bucket_name)
+#     source_blob = source_bucket.blob(origin_blob_name)
+#     destination_bucket = storage_client.bucket(destination_bucket_name)
+
+#     blob_copy = source_bucket.copy_blob(
+#         source_blob, destination_bucket, destination_blob_name
+#     )
+#     source_bucket.delete_blob(origin_blob_name)
+# return
 
 
-def get_list_reports(dataset,table):
-    """
-    Given a table name, returns a list with the file names that were already uploaded to bq
-    """
 
+def stripe_csv_bq(uri,table_id,job_config):
     client = bigquery.Client()
+    load_job = client.load_table_from_uri(
+        uri, table_id, job_config=job_config)  # Make an API request.
 
-    query = f"""SELECT DISTINCT file
-            FROM `{dataset}.{table}`"""
+    load_job.result()  # Waits for the job to complete.
 
-    query_job = client.query(query)
+    destination_table = client.get_table(table_id)  # Make an API request.
+    print("Loaded {} rows.".format(destination_table.num_rows))
+    return
 
-    rows = query_job.result()
-    list_reports_uploaded = [row.file for row in rows]
 
-    return list_reports_uploaded
-
-def move_blob(bucket_name, blob_name, destination_bucket_name, destination_blob_name):
-    """Moves a blob from one bucket to another with a new name."""
-
-    storage_client = storage.Client()
-
-    source_bucket = storage_client.bucket(bucket_name)
-    source_blob = source_bucket.blob(blob_name)
-    destination_bucket = storage_client.bucket(destination_bucket_name)
-
-    blob_copy = source_bucket.copy_blob(
-        source_blob, destination_bucket, destination_blob_name
-    )
-    source_bucket.delete_blob(blob_name)
 
 
 # Triggered by a change in a storage bucket
 @functions_framework.cloud_event
-def amazon_sg_process(cloud_event):
-
-   # first the function loads the file and classify it on
-   # transaction view or order central
-   # second process the file to fit the destination table
-   # third uploads the file
-   # fourth move the file to the processed data folder
-
+def upload_stripe_bq(cloud_event):
     data = cloud_event.data
-    event_type = cloud_event["type"]
+
     bucket = data["bucket"]
     name = data["name"]
 
-    ## URI from uploaded file to be loaded
+
+# Construct a BigQuery client object.
+    # client = bigquery.Client()
+    project_id = os.environ.get('PROJECT_ID')
+    dataset_id = os.environ.get('DATASET_ID')
+    table_name_bal = os.environ.get('TABLE_ID')
+    table_name_pay = os.environ.get('TABLE_ID_PAY')
+    table_name_ama = os.environ.get('TABLE_ID_AMA')
+    prefix = name[:3]
+
+
     uri = f"gs://{bucket}/{name}"
-    if 'tv' in name.lower():
-        header_cut = 7
-        df = pd.read_table(uri,header=header_cut)
-        if 'settlement-id' not in df.columns:
-            header_cut = 6
-            df = pd.read_table(uri,header=header_cut)
-            print('New ver')
-        report_type = 'tv'
-        if 'promotion-id' not in df.columns and report_type == 'tv':
-            df['promotion-id'] = None
-        rep_dest = rep_classifier[report_type]
-        print(report_type)
-    elif 'oc' in name.lower():
-        df = pd.read_table(uri)
-        report_type = 'oc'
-        rep_dest = rep_classifier[report_type]
-        print(report_type)
-    else:
-        return print("incorrect report")
+
+    if prefix == 'BAL':
+        print("BALANCE")
+        job_config_bal = bigquery.LoadJobConfig(
+        schema=[
+            bigquery.SchemaField("balance_transaction_id", "STRING"),
+            bigquery.SchemaField("created_utc", "DATETIME"),
+            bigquery.SchemaField("currency", "STRING"),
+            bigquery.SchemaField("gross", "FLOAT"),
+            bigquery.SchemaField("fee", "FLOAT"),
+            bigquery.SchemaField("net", "FLOAT"),
+            bigquery.SchemaField("reporting_category", "STRING"),
+            bigquery.SchemaField("source_id", "STRING"),
+            bigquery.SchemaField("description", "STRING"),
+            bigquery.SchemaField("customer_facing_amount", "FLOAT"),
+            bigquery.SchemaField("customer_facing_currency", "STRING"),
+            bigquery.SchemaField("customer_id", "STRING"),
+            bigquery.SchemaField("customer_email", "STRING"),
+            bigquery.SchemaField("customer_description", "STRING"),
+            bigquery.SchemaField("charge_id", "STRING"),
+            bigquery.SchemaField("payment_intent_id", "STRING"),
+            bigquery.SchemaField("invoice_id", "STRING"),
+            bigquery.SchemaField("payment_method_type", "STRING"),
+        ],
+        skip_leading_rows=1,
+        # The source format defaults to CSV, so the line below is optional.
+        source_format=bigquery.SourceFormat.CSV,
+        write_disposition='WRITE_APPEND',)
+        table_bal = f'{project_id}.{dataset_id}.{table_name_bal}'
+        stripe_csv_bq(uri,table_bal,job_config_bal)
 
 
-    try:
-        list_uploaded = get_list_reports(dataset,rep_dest["destination_table"])
-    except:
-        print("Error in the query, the file will be uploaded")
-        list_uploaded = []
+    elif prefix == 'PAY':
+        print("PAYOUT")
+        job_config_pay = bigquery.LoadJobConfig(
+        schema=[
+            bigquery.SchemaField("automatic_payout_id", "STRING"),
+            bigquery.SchemaField("automatic_payout_effective_at", "DATETIME"),
+            bigquery.SchemaField("balance_transaction_id", "STRING"),
+            bigquery.SchemaField("created_utc", "DATETIME"),
+            bigquery.SchemaField("created", "DATETIME"),
+            bigquery.SchemaField("available_on_utc", "DATETIME"),
+            bigquery.SchemaField("available_on", "DATETIME"),
+            bigquery.SchemaField("currency", "STRING"),
+            bigquery.SchemaField("gross", "FLOAT"),
+            bigquery.SchemaField("fee", "FLOAT"),
+            bigquery.SchemaField("net", "FLOAT"),
+            bigquery.SchemaField("reporting_category", "STRING"),
+            bigquery.SchemaField("source_id", "STRING"),
+            bigquery.SchemaField("description", "STRING"),
+            bigquery.SchemaField("customer_facing_amount", "FLOAT"),
+            bigquery.SchemaField("customer_facing_currency", "STRING"),
+            bigquery.SchemaField("customer_id", "STRING"),
+            bigquery.SchemaField("customer_email", "STRING"),
+            bigquery.SchemaField("charge_id", "STRING"),
+            bigquery.SchemaField("payment_intent_id", "STRING"),
+            bigquery.SchemaField("charge_created_utc", "DATETIME"),
+            bigquery.SchemaField("invoice_id", "STRING"),
+            bigquery.SchemaField("order_id", "STRING"),
+            bigquery.SchemaField("payment_method_type", "STRING"),
+            bigquery.SchemaField("connected_account_id", "STRING"),
+            bigquery.SchemaField("connected_account_name", "STRING"),
+        ],
+        skip_leading_rows=1,
+        # The source format defaults to CSV, so the line below is optional.
+        source_format=bigquery.SourceFormat.CSV,
+        write_disposition='WRITE_APPEND',)
+        table_pay = f'{project_id}.{dataset_id}.{table_name_pay}'
 
-    if name in list_uploaded:
-        print(f"{name} is already on the table")
-
-        bucket_name = bucket
-        blob_name = name
-        destination_bucket_name = new_bucket
-        folder_name = f'Amazon_SG/repeated_files'
-        new_name = f'{rep_classifier[report_type]["prefix"]}_{blob_name}'
-        destination_blob_name = f'{folder_name}/{new_name}'
-        move_blob(bucket_name, blob_name, destination_bucket_name, destination_blob_name)
-
-    ## TODO process in this case (deleting old data and replace with new)
-
-        return print("finish whitout changes,file moved to repeated_files folder")
-    ## Rename columns
-    df.columns = df.columns.map(lambda x: x.lower().strip().replace("-","_"))
-
-    df = df.astype(data_types[report_type])
-    ### date formatting
-    for column in datetime_columns[report_type]:
-        try:
-            df[column] = pd.to_datetime(df[column], format=datetime_format[report_type])
-        except:
-            print(column)
-            df[column] = pd.to_datetime(df[column], format=date_format)
-    if report_type == 'tv':
-        for column in date_columns[report_type]:
-            try:
-                df[column] = pd.to_datetime(df[column], format=date_format)
-            except:
-                print(column)
-                df[column] = pd.to_datetime(df[column], format=datetime_format[report_type])
-
-    for col in df.columns:
-    ### remove empty strings and nan values
-        df[col] = df[col].map(
-            lambda x: None if isinstance(x,str) and x in ["nan","NaN","NAN","Null","null",""] else x
-            )
-
-    df[['file']] = name
-
-    #### UPLOAD TO BQ
-    print("Uploading start")
-    table_id = f'{project}.{dataset}.{rep_classifier[report_type]["destination_table"]}'
-
-    dtypes_dict = {
-
-        "object": "STRING",
-        "int64": "INTEGER",
-        "float64": "FLOAT",
-        "datetime64[ns]": "DATETIME",
-        'datetime64[ns, UTC]': "DATETIME",
-        'datetime64[ns, pytz.FixedOffset(540)]': "DATETIME",
-    }
-    disposition = "WRITE_APPEND"
-
-    job_config = bigquery.LoadJobConfig(
-    schema=[
-        eval(
-            f"bigquery.SchemaField('{col}', bigquery.enums.SqlTypeNames.{dtypes_dict[str(df[col].dtypes)]})"
-        ) for col in df.columns
-    ]
-    ,
-    write_disposition=disposition,)
-
-    client = bigquery.Client()
-    job = client.load_table_from_dataframe(
-    df, table_id, job_config=job_config)  # Make an API request.
-    job.result()
-    print("Upload finished")
+        stripe_csv_bq(uri,table_pay,job_config_pay)
 
 
-    #### Move the file
-    print("Moving file to processed data bucket")
+    elif prefix == 'AMA':
+        from amazon_pay_txt_process import clean_txt,upload_ama
 
-    bucket_name = bucket
-    blob_name = name
-    destination_bucket_name = new_bucket
-    folder_name = f'Amazon_SG/{rep_classifier[report_type]["folder"]}'
-    new_name = f'{blob_name}'
-    destination_blob_name = f'{folder_name}/{new_name}'
+        df_ama = clean_txt(uri)
+        table_upload = f'{project_id}.{dataset_id}.{table_name_ama}'
 
-    ### Call the function
-    move_blob(bucket_name, blob_name, destination_bucket_name, destination_blob_name)
-    return "ok"
+        upload_ama(df_ama,table_upload)
+
+        ama_file_name = name[:-4]
+        year = ama_file_name[4:8]
+
+        filename = f'Shopify/amazon_pay/{year}/{ama_file_name}.csv'
+        storage_client = storage.Client()
+        bucket = storage_client.list_buckets().client.bucket('fujiorg-sales-data')
+        blob = bucket.blob(filename)
+        blob.upload_from_string(df_ama.to_csv(index = False),content_type = 'csv')
+        return
