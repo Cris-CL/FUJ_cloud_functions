@@ -55,19 +55,19 @@ def get_all_payouts(last_order_id):
             break
     return transactions
 
+
 def get_new_payouts(last_id):
-    shop_url = f"https://{API_KEY}:{SHOPIFY_PASS}@fuji-organics.myshopify.com/admin/api/{API_VERSION}/"
+    shop_url = f"https://{SHOPIFY_KEY}:{SHOPIFY_PASS}@fuji-organics.myshopify.com/admin/api/{API_VERSION}/"
     shopify.ShopifyResource.set_site(shop_url)
     shop = shopify.Shop.current
     limit_payout = 250
     payouts_response = shopify.Balance.get(
-        limit=limit_payout,
-        since_id=last_id,
-        method_name="transactions"
-        )
+        limit=limit_payout, since_id=last_id, method_name="transactions"
+    )
     payout_df = pd.DataFrame(payouts_response)
 
     return payout_df
+
 
 def main(data, context):
     """
@@ -149,11 +149,11 @@ def main(data, context):
             lambda x: None if x in ["nan", "", "None", "null", "NaN", "NAN"] else x
         )
         df[col] = df[col].apply(
-            lambda x: x.replace(".0", "") if isinstance(x,str) else x
+            lambda x: x.replace(".0", "") if isinstance(x, str) else x
         )
 
     ## Add time of creation
-    df["UPDATED_FROM_API"] = datetime.utcnow()
+    df["UPDATED_FROM_API"] = datetime.now()
 
     today_date = date.today().strftime("%Y_%m_%d")
     file_name = f"SHOPIFY_PAYOUTS_{today_date}_{result}_RAW.csv"
