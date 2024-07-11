@@ -133,12 +133,20 @@ def upload_stripe_bq(cloud_event):
         year = ama_file_name[4:8]
 
         filename = f"Shopify/amazon_pay/{year}/{ama_file_name}.csv"
+        raw_name = f"Shopify/amazon_pay/RAW/{name}"
+
         storage_client = storage.Client()
         bucket_ama = storage_client.list_buckets().client.bucket("fujiorg-sales-data")
         blob = bucket_ama.blob(filename)
         blob.upload_from_string(df_ama.to_csv(index=False), content_type="csv")
         try:
             source_bucket = storage_client.bucket(bucket)
+            source_blob = source_bucket.blob(name)
+            blob_copy = source_bucket.copy_blob(
+                source_blob,
+                bucket_ama,
+                raw_name
+                )
             source_bucket.delete_blob(name)
         except Exception as e:
             print(e, type(e))
