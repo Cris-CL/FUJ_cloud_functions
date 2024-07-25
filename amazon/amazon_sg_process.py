@@ -18,7 +18,7 @@ project = os.environ.get('PROJECT_ID')
 new_bucket = os.environ.get('NEW_BUCKET')
 
 
-year = '2023' #### Changed year to current one
+year = '2024' #### Changed year to current one
 rep_classifier = {
     'tv':{
         'destination_table':table_2,
@@ -162,7 +162,12 @@ def amazon_sg_process(cloud_event):
     ## URI from uploaded file to be loaded
     uri = f"gs://{bucket}/{name}"
     if 'tv' in name.lower():
-        df = pd.read_table(uri,header=7)
+        header_cut = 7
+        df = pd.read_table(uri,header=header_cut)
+        if 'settlement-id' not in df.columns:
+            header_cut = 6
+            df = pd.read_table(uri,header=header_cut)
+            print('New ver')
         report_type = 'tv'
         if 'promotion-id' not in df.columns and report_type == 'tv':
             df['promotion-id'] = None
