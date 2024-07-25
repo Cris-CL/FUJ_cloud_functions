@@ -1,10 +1,11 @@
 # functions-framework==3.*
-# pandas==1.5.1
 # google-cloud-bigquery>=3.3.5
 # google-cloud-storage>=2.5.0
 # fsspec==2022.11.0
 # gcsfs==2022.11.0
 # pyarrow==9.0.0
+# pandas==1.5.1
+# numpy==1.23.4
 
 import os
 import pandas as pd
