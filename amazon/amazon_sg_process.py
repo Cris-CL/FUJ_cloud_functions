@@ -8,110 +8,11 @@
 # numpy==1.23.4
 
 import os
+from datetime import datetime
 import pandas as pd
 from google.cloud import bigquery,storage
 import functions_framework
-
-table_1 = os.environ.get('TABLE_1')
-table_2 = os.environ.get('TABLE_2')
-dataset = os.environ.get('DATASET_ID')
-project = os.environ.get('PROJECT_ID')
-new_bucket = os.environ.get('NEW_BUCKET')
-
-
-year = '2024' #### Changed year to current one
-rep_classifier = {
-    'tv':{
-        'destination_table':table_2,
-        'prefix':'TV',
-        'folder':f'transaction_view/settlement_{year}' ### Modify year when it changes
-        },
-    'oc':{
-        'destination_table':table_1,
-        'prefix':'OC',
-        'folder':f'order_central/sales_{year}' ### Modify year when it changes
-    },
-}
-data_types = {
-    'tv':{
-        'settlement_id': 'float',
-        'total_amount': 'float',
-        'currency': 'str',
-        'transaction_type': 'str',
-        'order_id': 'str',
-        'merchant_order_id': 'str',
-        'adjustment_id': 'str',
-        'shipment_id': 'str',
-        'marketplace_name': 'str',
-        'amount_type': 'str',
-        'amount_description': 'str',
-        'amount': 'float',
-        'fulfillment_id': 'str',
-        'order_item_code': 'str',
-        'merchant_order_item_id': 'str',
-        'merchant_adjustment_item_id': 'float',
-        'sku': 'str',
-        'quantity_purchased': 'float',
-        "promotion_id":"str"
-
-    },
-    'oc':{
-        "amazon_order_id": "str",
-        "merchant_order_id": "str",
-        "order_status": "str",
-        "fulfillment_channel": "str",
-        "sales_channel": "str",
-        "order_channel": "str",
-        "url": "str",
-        "ship_service_level": "str",
-        "product_name": "str",
-        "sku": "str",
-        "asin": "str",
-        "item_status": "str",
-        "quantity": "int64",
-        "currency": "str",
-        "item_price": "float",
-        "item_tax": "float",
-        "shipping_price": "float",
-        "shipping_tax": "float",
-        "gift_wrap_price": "float",
-        "gift_wrap_tax": "float",
-        "item_promotion_discount": "float",
-        "ship_promotion_discount": "float",
-        "ship_city": "str",
-        "ship_state": "str",
-        "ship_postal_code": "str",
-        "ship_country": "str",
-        "promotion_ids":"str"
-    }
-}
-
-datetime_format = {
-    'tv':'%d.%m.%Y %H:%M:%S %Z',
-    'oc':'%Y-%m-%dT%H:%M:%S%z'
-    }
-date_format = '%d.%m.%Y'
-
-datetime_columns = {
-    'tv': [
-        'settlement_start_date', # datetime
-        'settlement_end_date', # datetime
-        'deposit_date', # datetime
-        'posted_date', # date
-        'posted_date_time', # datetime
-        ]
-    ,
-    'oc': [
-        "purchase_date",
-        "last_updated_date",
-        ]
-}
-date_columns = {
-    'tv':[
-        'posted_date'
-        ]
-    }
-
+from config_asg import *
 
 def get_list_reports(dataset,table):
     """
@@ -120,8 +21,7 @@ def get_list_reports(dataset,table):
 
     client = bigquery.Client()
 
-    query = f"""SELECT DISTINCT file
-            FROM `{dataset}.{table}`"""
+    query = f"""SELECT DISTINCT FILE_NAME FROM `{dataset}.{table}`"""
 
     query_job = client.query(query)
 
@@ -144,24 +44,9 @@ def move_blob(bucket_name, blob_name, destination_bucket_name, destination_blob_
     )
     source_bucket.delete_blob(blob_name)
 
-
-# Triggered by a change in a storage bucket
-@functions_framework.cloud_event
-def amazon_sg_process(cloud_event):
-
-   # first the function loads the file and classify it on
-   # transaction view or order central
-   # second process the file to fit the destination table
-   # third uploads the file
-   # fourth move the file to the processed data folder
-
-    data = cloud_event.data
-    event_type = cloud_event["type"]
-    bucket = data["bucket"]
-    name = data["name"]
-
-    ## URI from uploaded file to be loaded
-    uri = f"gs://{bucket}/{name}"
+def get_dataframe(uri,name):
+    df = pd.DataFrame()
+    report_type = ''
     if 'tv' in name.lower():
         header_cut = 7
         df = pd.read_table(uri,header=header_cut)
@@ -172,78 +57,45 @@ def amazon_sg_process(cloud_event):
         report_type = 'tv'
         if 'promotion-id' not in df.columns and report_type == 'tv':
             df['promotion-id'] = None
-        rep_dest = rep_classifier[report_type]
         print(report_type)
     elif 'oc' in name.lower():
         df = pd.read_table(uri)
         report_type = 'oc'
-        rep_dest = rep_classifier[report_type]
         print(report_type)
     else:
-        return print("incorrect report")
+        print("incorrect report")
+    return [df,report_type]
 
-
-    try:
-        list_uploaded = get_list_reports(dataset,rep_dest["destination_table"])
-    except:
-        print("Error in the query, the file will be uploaded")
-        list_uploaded = []
-
-    if name in list_uploaded:
-        print(f"{name} is already on the table")
-
-        bucket_name = bucket
-        blob_name = name
-        destination_bucket_name = new_bucket
-        folder_name = f'Amazon_SG/repeated_files'
-        new_name = f'{rep_classifier[report_type]["prefix"]}_{blob_name}'
-        destination_blob_name = f'{folder_name}/{new_name}'
-        move_blob(bucket_name, blob_name, destination_bucket_name, destination_blob_name)
-
-    ## TODO process in this case (deleting old data and replace with new)
-
-        return print("finish whitout changes,file moved to repeated_files folder")
-    ## Rename columns
+def prepare_dataframe(df,df_type,file_name):
     df.columns = df.columns.map(lambda x: x.lower().strip().replace("-","_"))
 
-    df = df.astype(data_types[report_type])
+    df = df.astype(data_types[df_type])
     ### date formatting
-    for column in datetime_columns[report_type]:
+    for column in datetime_columns[df_type]:
         try:
-            df[column] = pd.to_datetime(df[column], format=datetime_format[report_type])
+            df[column] = pd.to_datetime(df[column], format=datetime_format[df_type])
         except:
             print(column)
             df[column] = pd.to_datetime(df[column], format=date_format)
-    if report_type == 'tv':
-        for column in date_columns[report_type]:
+    if df_type == 'tv':
+        for column in date_columns[df_type]:
             try:
                 df[column] = pd.to_datetime(df[column], format=date_format)
             except:
                 print(column)
-                df[column] = pd.to_datetime(df[column], format=datetime_format[report_type])
+                df[column] = pd.to_datetime(df[column], format=datetime_format[df_type])
 
     for col in df.columns:
     ### remove empty strings and nan values
         df[col] = df[col].map(
-            lambda x: None if isinstance(x,str) and x in ["nan","NaN","NAN","Null","null",""] else x
+            lambda x: None if isinstance(x,str) and x.lower() in ["nan","null","<na>",""," "] else x
             )
+    df[['FILE_NAME']] = file_name
+    df[['UPLOADED_DATETIME']] = datetime.now()
+    return df
 
-    df[['file']] = name
-
-    #### UPLOAD TO BQ
-    print("Uploading start")
-    table_id = f'{project}.{dataset}.{rep_classifier[report_type]["destination_table"]}'
-
-    dtypes_dict = {
-
-        "object": "STRING",
-        "int64": "INTEGER",
-        "float64": "FLOAT",
-        "datetime64[ns]": "DATETIME",
-        'datetime64[ns, UTC]': "DATETIME",
-        'datetime64[ns, pytz.FixedOffset(540)]': "DATETIME",
-    }
-    disposition = "WRITE_APPEND"
+def upload_bq(df,df_type):
+    table_id = f'{project}.{dataset}.{rep_classifier[df_type]["destination_table"]}'
 
     job_config = bigquery.LoadJobConfig(
     schema=[
@@ -259,18 +111,63 @@ def amazon_sg_process(cloud_event):
     df, table_id, job_config=job_config)  # Make an API request.
     job.result()
     print("Upload finished")
+    return
 
 
-    #### Move the file
-    print("Moving file to processed data bucket")
+# Triggered by a change in a storage bucket
+@functions_framework.cloud_event
+def amazon_sg_process(cloud_event):
 
+   # first the function loads the file and classify it on
+   # transaction view or order central
+   # second process the file to fit the destination table
+   # third uploads the file
+   # fourth move the file to the processed data folder
+
+    data = cloud_event.data
+    event_type = cloud_event["type"]
+    bucket = data["bucket"]
+    name = data["name"]
     bucket_name = bucket
     blob_name = name
     destination_bucket_name = new_bucket
-    folder_name = f'Amazon_SG/{rep_classifier[report_type]["folder"]}'
-    new_name = f'{blob_name}'
-    destination_blob_name = f'{folder_name}/{new_name}'
 
-    ### Call the function
+    ## URI from uploaded file to be loaded
+    uri = f"gs://{bucket}/{name}"
+
+    data_report = get_dataframe(uri,name)
+    df = data_report[0]
+    report_type = data_report[1]
+
+    if report_type not in ['tv','oc']:
+        print('Wrong report loading, finishing process')
+        return
+
+    rep_destination = rep_classifier.get(report_type,'')
+
+    try:
+        list_uploaded = get_list_reports(dataset,rep_destination["destination_table"])
+    except Exception as e:
+        print(e,type(e))
+        print("Error in the query, the file will be uploaded")
+        list_uploaded = []
+
+    if name in list_uploaded:
+        print(f"{name} is already on the table")
+
+        folder_name = f'Amazon_SG/repeated_files'
+        new_name = f'{rep_classifier[report_type]["prefix"]}_{blob_name}'
+        destination_blob_name = f'{folder_name}/{new_name}'
+        print("finish whitout changes,file moved to repeated_files folder")
+    else:
+        folder_name = f'Amazon_SG/{rep_classifier[report_type]["folder"]}'
+        new_name = f'{blob_name}'
+        destination_blob_name = f'{folder_name}/{new_name}'
+        print("Moving file to processed data bucket")
     move_blob(bucket_name, blob_name, destination_bucket_name, destination_blob_name)
-    return "ok"
+
+    #### UPLOAD TO BQ
+    print("Uploading start")
+    df = prepare_dataframe(df, df_type=report_type, file_name=name)
+    upload_bq(df,report_type)
+    return
