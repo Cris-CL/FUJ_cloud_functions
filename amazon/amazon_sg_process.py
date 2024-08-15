@@ -95,22 +95,27 @@ def prepare_dataframe(df,df_type,file_name):
     return df
 
 def upload_bq(df,df_type):
-    table_id = f'{project}.{dataset}.{rep_classifier[df_type]["destination_table"]}'
+    if df.empty:
+        print("No new data")
+        return
+    else:
+        print("Uploading start")
+        table_id = f'{project}.{dataset}.{rep_classifier[df_type]["destination_table"]}'
 
-    job_config = bigquery.LoadJobConfig(
-    schema=[
-        eval(
-            f"bigquery.SchemaField('{col}', bigquery.enums.SqlTypeNames.{dtypes_dict[str(df[col].dtypes)]})"
-        ) for col in df.columns
-    ]
-    ,
-    write_disposition=disposition,)
+        job_config = bigquery.LoadJobConfig(
+        schema=[
+            eval(
+                f"bigquery.SchemaField('{col}', bigquery.enums.SqlTypeNames.{dtypes_dict[str(df[col].dtypes)]})"
+            ) for col in df.columns
+        ]
+        ,
+        write_disposition=disposition,)
 
-    client = bigquery.Client()
-    job = client.load_table_from_dataframe(
-    df, table_id, job_config=job_config)  # Make an API request.
-    job.result()
-    print("Upload finished")
+        client = bigquery.Client()
+        job = client.load_table_from_dataframe(
+        df, table_id, job_config=job_config)  # Make an API request.
+        job.result()
+        print("Upload finished")
     return
 
 
@@ -159,15 +164,16 @@ def amazon_sg_process(cloud_event):
         new_name = f'{rep_classifier[report_type]["prefix"]}_{blob_name}'
         destination_blob_name = f'{folder_name}/{new_name}'
         print("finish whitout changes,file moved to repeated_files folder")
+        df = pd.DataFrame()
+
     else:
         folder_name = f'Amazon_SG/{rep_classifier[report_type]["folder"]}'
         new_name = f'{blob_name}'
         destination_blob_name = f'{folder_name}/{new_name}'
         print("Moving file to processed data bucket")
-    move_blob(bucket_name, blob_name, destination_bucket_name, destination_blob_name)
+        df = prepare_dataframe(df, df_type=report_type, file_name=name)
 
+    move_blob(bucket_name, blob_name, destination_bucket_name, destination_blob_name)
     #### UPLOAD TO BQ
-    print("Uploading start")
-    df = prepare_dataframe(df, df_type=report_type, file_name=name)
     upload_bq(df,report_type)
     return
