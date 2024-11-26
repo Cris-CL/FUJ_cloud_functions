@@ -37,7 +37,7 @@ def main(data, context):
     df = discount_process(df)
 
     ## Add time of creation
-    df["UPDATED_FROM_API"] = datetime.utcnow()
+    df["UPDATED_FROM_API"] = datetime.now()
 
     # Change datetime using Series.dt.tz_localize() according to pandas doc
     # ref https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.astype.html
