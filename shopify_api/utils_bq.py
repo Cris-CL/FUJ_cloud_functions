@@ -58,13 +58,17 @@ def delete_pending_orders():
         bq_cl_tmp = bigquery.Client()
         ## Changed to better select the last order in the previous 2 weeks
         q_tmp = f"""
-        -- deleting last 2 weeks get_orders function
-        DELETE `{PROJECT_NAME}.{TABLE_NAME}`
-        Where
-            CAST(order_number as int64) > (
-                SELECT max(CAST(order_number as int64))
-                FROM `{PROJECT_NAME}.{TABLE_NAME}`
-                WHERE created_at < CAST(DATE_SUB(CURRENT_DATE(), INTERVAL 14 DAY) AS TIMESTAMP)
+        -- delete_pending_orders query
+        DELETE
+            `{PROJECT_NAME}.{TABLE_NAME}`
+        WHERE
+            CAST(order_number AS int64) > (
+                SELECT
+                    MAX(CAST(order_number AS int64))
+                FROM
+                    `{PROJECT_NAME}.{TABLE_NAME}`
+                WHERE
+                    created_at < CAST(DATE_SUB(CURRENT_DATE(), INTERVAL 14 DAY) AS TIMESTAMP)
                 -- today minus 14 days
             )
             """
@@ -96,9 +100,18 @@ def get_last_order_id():
 
     ## query select the id correspondig to the last order in the table
     query = f"""
-    select distinct id
-    FROM `{PROJECT_NAME}.{TABLE_NAME}`
-    Where CAST(order_number as integer) = (SELECT max(CAST(order_number as integer)) FROM `{PROJECT_NAME}.{TABLE_NAME}`)
+    ---- get_last_order_id query ----
+    SELECT DISTINCT
+        id
+    FROM
+        `{PROJECT_NAME}.{TABLE_NAME}`
+    WHERE
+        CAST(order_number AS integer) = (
+            SELECT
+                MAX(CAST(order_number AS integer))
+            FROM
+                `{PROJECT_NAME}.{TABLE_NAME}`
+                )
     """
     ##### previously the max(name) caused problems because it was an string and the max string was #9999 and since then the orders were duplicated
 

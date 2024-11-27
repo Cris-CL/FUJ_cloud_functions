@@ -24,9 +24,8 @@ def main(data, context):
 
     df = get_all_orders(result)  ## 2270011949127 --> Reference id that works
 
-    if not isinstance(
-        df, pd.DataFrame
-    ):  ### if the df is not a dataframe, it means that there is no new data
+    ### if the df is not a dataframe, it means that there is no new data
+    if not isinstance(df, pd.DataFrame):
         return print("No new data to add")
     elif len(df) < 1:
         return print("No new data to add")
