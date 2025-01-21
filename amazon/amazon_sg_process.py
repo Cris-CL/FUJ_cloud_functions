@@ -27,7 +27,7 @@ def get_list_reports(dataset, table):
     query_job = client.query(query)
 
     rows = query_job.result()
-    list_reports_uploaded = [row.file for row in rows]
+    list_reports_uploaded = [row.FILE_NAME for row in rows]
 
     return list_reports_uploaded
 

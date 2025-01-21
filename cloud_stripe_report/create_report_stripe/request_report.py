@@ -1,6 +1,3 @@
-# google-cloud-bigquery>=3.3.5
-# stripe>=4.2.0
-
 from google.cloud import bigquery
 import stripe
 import os
@@ -19,7 +16,10 @@ def stripe_weekly():
 
   ## Query to get last transaction in bq
 
-  query =f"""SELECT max(created_utc) FROM `{table_q}`"""
+  query =f"""
+  ---- stripe_weekly query ----
+  SELECT MAX(created_utc) FROM `{table_q}`
+  """
   client_q = bigquery.Client()
   query_job = client_q.query(query)  # Make an API request.
   rows = query_job.result()
