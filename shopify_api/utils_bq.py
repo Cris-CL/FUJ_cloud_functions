@@ -4,7 +4,7 @@ from google.cloud import storage
 from datetime import datetime
 
 def upload_to_bq(df, today_date, result):
-    """ "
+    """
     Uploads the dataframe to BigQuery
 
     This function uploads the dataframe to BigQuery, and if it fails,
@@ -40,7 +40,7 @@ def upload_to_bq(df, today_date, result):
 
 
 def delete_pending_orders():
-    """ "
+    """
     Deletes the pending orders from the BigQuery table
 
     This function deletes the pending orders from the BigQuery table every monday
@@ -58,7 +58,7 @@ def delete_pending_orders():
         bq_cl_tmp = bigquery.Client()
         ## Changed to better select the last order in the previous 2 weeks
         q_tmp = f"""
-        -- delete_pending_orders query
+        ---- delete_pending_orders query ----
         DELETE
             `{PROJECT_NAME}.{TABLE_NAME}`
         WHERE
@@ -71,6 +71,7 @@ def delete_pending_orders():
                     created_at < CAST(DATE_SUB(CURRENT_DATE(), INTERVAL 14 DAY) AS TIMESTAMP)
                 -- today minus 14 days
             )
+        ---- delete_pending_orders query ----
             """
         print("cleaning pending orders")
         try:
@@ -112,6 +113,7 @@ def get_last_order_id():
             FROM
                 `{PROJECT_NAME}.{TABLE_NAME}`
                 )
+    ---- get_last_order_id query ----
     """
     ##### previously the max(name) caused problems because it was an string and the max string was #9999 and since then the orders were duplicated
 
@@ -129,9 +131,22 @@ def get_last_order_id():
 
 
 def backup_deleted_orders(file_name_deleted,df_deleted):
+    """
+    Uploads to a bucket the last 2 weeks of orders after deleting
+
+    Parameters:
+     - file_name_deleted (str): The name for the file to be uploaded
+     - df (pd.DataFrame): A dataframe with the orders from the previous 2 weeks
+
+    Returns:
+    - None
+    """
+
     print("Saving to bucket last 2 weeks of orders")
+
     storage_client = storage.Client()
     bucket = storage_client.list_buckets().client.bucket(BUCKET)
     blob = bucket.blob(file_name_deleted)
     blob.upload_from_string(df_deleted.to_csv(index=False), content_type="csv/txt")
+
     return
