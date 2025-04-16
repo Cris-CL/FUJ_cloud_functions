@@ -157,7 +157,11 @@ columns_names_translation = {
     '警告表示タイプ詳細':'warning_display_type_details',
     'SKU管理番号':'sku_management_number',
     'システム連携用SKU番号':'sku_integration_number',
-    'SKU情報':'sku_info'
+    'SKU情報':'sku_info',
+    "最強配送フラグ":"strongest_delivery_flag",
+    "注文当日出荷フラグ":"order_same_day_shipping_flag",
+    "置き配フラグ":"delivery_flag",
+    "置き配場所":"delivery_location",
     }
 
 dict_col = {
