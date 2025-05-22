@@ -126,7 +126,7 @@ def join_orders_transactions(orders_df, transactions_df):
     return new_df
 
 
-def stripe_process(df):
+def other_payments_process(df):
     """
     Process the stripe orders, and returns the processed dataframe
 
@@ -149,8 +149,6 @@ def stripe_process(df):
         if len(komoju_list) > 1:
             transactions_komoju = get_transactions(komoju_list,"komoju")
             df = join_orders_transactions(df, transactions_komoju)
-        else:
-            return df
     except Exception as e:
         print(e, type(e))
         print("Stripe process failed")
