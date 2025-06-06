@@ -11,9 +11,9 @@ from orders_parameters import *
 from utils_bq import *
 from utils_df import *
 from orders_process import get_all_orders,other_payments_process
+from flask import jsonify
 
-
-def main(data, context):
+def main(data=None, context=None):
     """
     whole process from check the last order, to make api calls until the data is updated, and save that data as a
     csv file in the bucket while uploading the same data to the orders table in BigQuery
@@ -50,4 +50,5 @@ def main(data, context):
     upload_to_bq(df, today_date, result)
     if dt.weekday() == 0:
         backup_deleted_orders(file_name,df)
-    return
+    http_status=jsonify({'status':'success'}),200
+    return http_status
