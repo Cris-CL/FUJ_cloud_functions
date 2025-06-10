@@ -10,8 +10,10 @@ from datetime import datetime, date
 from orders_parameters import *
 from utils_bq import *
 from utils_df import *
-from orders_process import get_all_orders,other_payments_process
+from orders_process import get_all_orders, other_payments_process
+from fulfillments import *
 from flask import jsonify
+
 
 def main(data=None, context=None):
     """
@@ -49,6 +51,16 @@ def main(data=None, context=None):
     ## Upload to BQ
     upload_to_bq(df, today_date, result)
     if dt.weekday() == 0:
-        backup_deleted_orders(file_name,df)
-    http_status=jsonify({'status':'success'}),200
+        backup_deleted_orders(file_name, df)
+
+    try:
+        new_order_ids = get_order_ids(df)
+        fulf_df = get_fullfillments(new_order_ids)
+        clean_fulfillments(new_order_ids)
+        upload_fulfillments(fulf_df)
+    except Exception as e:
+        print(f"Error in fulfillment process: {e}")
+
+    http_status = jsonify({"status": "success"}), 200
+
     return http_status
