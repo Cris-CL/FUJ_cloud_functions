@@ -7,6 +7,7 @@ BUCKET = os.environ.get("BUCKET")
 PROJECT_NAME = os.environ.get("PROJECT_NAME")
 TABLE_NAME = os.environ.get("TABLE_NAME")
 STORE_NAME = os.environ.get("STORE_NAME")
+FULFILLMENT_TABLE = os.environ.get("FULFILLMENT_TABLE")
 
 fields_api = [
     "id",
