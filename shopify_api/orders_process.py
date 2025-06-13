@@ -51,19 +51,20 @@ def get_all_orders(last_order_id):
     return orders
 
 
-def get_transactions(id_list):
+def get_transactions(id_list,type_id):
     """
     Gets all the transactions from the shopify store, and returns a dataframe
 
     Using the shopify api, loops throught all the transactions with the order_id
-    in the id_list that correspond to the orders processed in stripe,
+    in the id_list that correspond to the orders processed in stripe/komoju,
     and returns a pandas dataframe with all the transactions parameters
 
     Parameters:
-    - id_list (list): A list with all the order ids that were processed in stripe
+    - id_list (set): A list with all the order ids that were processed in stripe/komoju
+    - type_id (string): Selector for stripe or komoju.
 
     Returns:
-    - trans_filter (pd.DataFrame): A dataframe with all the stripe transactions
+    - trans_filter (pd.DataFrame): A dataframe with all the stripe/komoju transactions
     """
 
     transactions = pd.DataFrame()
@@ -73,12 +74,14 @@ def get_transactions(id_list):
         response_in = requests.get(url)
         df = pd.json_normalize(response_in.json()["transactions"][0])
         for row in df.iterrows():
-            for key in row[1].keys():
-                if isinstance(row[1][key], str) and "ch_" in row[1][key]:
-                    df.loc[row[0], "CHARGE_ID_CORRECT"] = row[1][key]
-                    continue
+            if type_id == "stripe":
+                for key in row[1].keys():
+                    if isinstance(row[1][key], str) and "ch_" in row[1][key]:
+                        df.loc[row[0], "CHARGE_ID_CORRECT"] = row[1][key]
+                        continue
+            elif type_id == "komoju":
+                df[ "CHARGE_ID_CORRECT"] = row[1]["payment_id"]
         transactions = pd.concat([transactions, df], ignore_index=True)
-
     trans_filter = transactions[["order_id", "CHARGE_ID_CORRECT"]]
     return trans_filter
 
@@ -123,7 +126,7 @@ def join_orders_transactions(orders_df, transactions_df):
     return new_df
 
 
-def stripe_process(df):
+def other_payments_process(df):
     """
     Process the stripe orders, and returns the processed dataframe
 
@@ -131,16 +134,21 @@ def stripe_process(df):
     - df (pd.DataFrame): A dataframe with all the orders from the shopify store
 
     Returns:
-    - df (pd.DataFrame): The same dataframe, but with the stripe orders processed
+    - df (pd.DataFrame): The same dataframe, but with the stripe/komoju orders processed
     """
 
     try:
         stripe_list = set(df[df["payment_gateway_names"] == "stripe"]["id"])
-        if len(stripe_list) < 1:
-            print("No stripe orders")
+        komoju_list = set(df[df["payment_gateway_names"] == 'KOMOJU - スマホ決済 (Smartphone Payments)']["id"])
+        if len(stripe_list) < 1 and len(komoju_list) < 1:
+            print("No stripe or komoju orders")
             return df
-        transactions = get_transactions(stripe_list)
-        df = join_orders_transactions(df, transactions)
+        if len(stripe_list) > 1:
+            transactions_stripe = get_transactions(stripe_list,"stripe")
+            df = join_orders_transactions(df, transactions_stripe)
+        if len(komoju_list) > 1:
+            transactions_komoju = get_transactions(komoju_list,"komoju")
+            df = join_orders_transactions(df, transactions_komoju)
     except Exception as e:
         print(e, type(e))
         print("Stripe process failed")
