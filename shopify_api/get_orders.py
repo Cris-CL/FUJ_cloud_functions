@@ -6,7 +6,7 @@
 
 import pandas as pd
 from datetime import datetime, date
-
+import pytz
 from orders_parameters import *
 from utils_bq import *
 from utils_df import *
@@ -28,9 +28,11 @@ def main(data=None, context=None):
 
     ### if the df is not a dataframe, it means that there is no new data
     if not isinstance(df, pd.DataFrame):
-        return print("No new data to add")
+        print("No new data to add")
+        return jsonify({"status": "success"}), 200
     elif len(df) < 1:
-        return print("No new data to add")
+        print("No new data to add")
+        return jsonify({"status": "success"}), 200
     # Clean data
 
     df = refunds(df)  ## new step for the refund column
@@ -57,6 +59,7 @@ def main(data=None, context=None):
         new_order_ids = get_order_ids(df)
         fulf_df = get_fullfillments(new_order_ids)
         clean_fulfillments(new_order_ids)
+        fulf_df["UPLOADED_DATETIME"] = datetime.now(pytz.timezone("Asia/Tokyo"))
         upload_fulfillments(fulf_df)
     except Exception as e:
         print(f"Error in fulfillment process: {e}")

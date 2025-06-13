@@ -19,23 +19,25 @@ def get_fullfillments(order_id_list):
     - fulfillments (pd.DataFrame): A dataframe with all the fulfillments from the shopify store
     """
     fullfillments = pd.DataFrame()
+    try:
+        for order_id in order_id_list:
+            url = f"https://{SHOPIFY_KEY}:{SHOPIFY_PASS}@{STORE_NAME}.myshopify.com/admin/api/{API_VERSION}/orders/{order_id}/fulfillments.json"
+            response_in = requests.get(url)
+            try:
+                df = pd.json_normalize(response_in.json()["fulfillments"])
+            except Exception as e:
+                print("get_fullfillments failed with error:")
+                print(e, type(e))
+                return fullfillments
+            fullfillments = pd.concat([fullfillments, df], ignore_index=True)
 
-    for order_id in order_id_list:
-        url = f"https://{SHOPIFY_KEY}:{SHOPIFY_PASS}@{STORE_NAME}.myshopify.com/admin/api/{API_VERSION}/orders/{order_id}/fulfillments.json"
-        response_in = requests.get(url)
-        try:
-            df = pd.json_normalize(response_in.json()["fulfillments"])
-        except Exception as e:
-            print("get_fullfillments failed with error:")
-            print(e, type(e))
+            # Function finishes with no new info
+        if len(fullfillments) < 1:
+            print("Api didnt provide new data")
             return fullfillments
-        fullfillments = pd.concat([fullfillments, df], ignore_index=True)
-
-        # Function finishes with no new info
-    if len(fullfillments) < 1:
-        print("Api didnt provide new data")
-        return fullfillments
-
+    except Exception as e:
+        print(f"Error in get_fullfillments")
+        raise e
     return fullfillments
 
 
@@ -45,6 +47,7 @@ def get_order_ids(orders_df):
         id_list = list(set(orders_df["id"].to_list()))
     except Exception as e:
         print(f"Error in get_order_ids {e}")
+        raise e
     return id_list
 
 
@@ -73,15 +76,30 @@ def clean_fulfillments(new_fulf):
     return True
 
 
+def get_table_columns(table_id):
+    rows_order_database = []
+    try:
+        with bigquery.Client() as client:
+            table_c = client.get_table(table_id)
+            rows_order_database = [x.name for x in table_c.schema]
+    except Exception as e:
+        print(f"Error in get_table_columns")
+        raise e
+    return rows_order_database
+
+
 def upload_fulfillments(df_fulf):
     try:
+        colums_df = get_table_columns(FULFILLMENT_TABLE)
+        df_fulf = df_fulf[colums_df].copy()
         df_fulf.to_gbq(
             destination_table=FULFILLMENT_TABLE,
             project_id=PROJECT_NAME,
             progress_bar=False,
             if_exists="append",  ### should be append
         )
+        print("Uploaded fulfillments")
     except Exception as e:
         print(f"Error in upload_fulfillments")
-        return False
+        raise e
     return True
