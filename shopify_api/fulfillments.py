@@ -89,6 +89,9 @@ def get_table_columns(table_id):
 
 
 def upload_fulfillments(df_fulf):
+    if len(df_fulf) < 1:
+        print("No data to upload")
+        return False
     try:
         colums_df = get_table_columns(FULFILLMENT_TABLE)
         df_fulf = df_fulf[colums_df].copy()
