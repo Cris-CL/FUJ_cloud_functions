@@ -33,7 +33,7 @@ def get_fullfillments(order_id_list):
 
             # Function finishes with no new info
         if len(fullfillments) < 1:
-            print("Api didnt provide new data")
+            print("Api didnt provide new fulfillment data")
             return fullfillments
     except Exception as e:
         print(f"Error in get_fullfillments")
