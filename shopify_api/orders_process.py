@@ -182,8 +182,9 @@ def other_payments_process(df):
         )
         komoju_list = set(
             df[
-                df["payment_gateway_names"]
-                == "KOMOJU - スマホ決済 (Smartphone Payments)"
+                df["payment_gateway_names"].apply(
+                    lambda x: True if "komoju" in str(x).lower() else False
+                )
             ]["id"]
         )
         if len(stripe_list) < 1 and len(komoju_list) < 1:
