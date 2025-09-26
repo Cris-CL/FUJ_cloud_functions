@@ -190,10 +190,10 @@ def other_payments_process(df):
         if len(stripe_list) < 1 and len(komoju_list) < 1:
             print("No stripe or komoju orders")
             return df
-        if len(stripe_list) > 1:
+        if len(stripe_list) > 0:
             transactions_stripe = get_transactions(stripe_list)
             df = join_orders_transactions(df, transactions_stripe)
-        if len(komoju_list) > 1:
+        if len(komoju_list) > 0:
             transactions_komoju = get_transactions(komoju_list)
             df = join_orders_transactions(df, transactions_komoju)
     except Exception as e:
