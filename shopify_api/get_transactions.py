@@ -13,13 +13,14 @@ from google.cloud import bigquery
 from google.cloud import storage
 from datetime import datetime, date
 import shopify
+import json
 
 SHOPIFY_KEY = os.environ.get("SHOPIFY_KEY")
 API_VERSION = os.environ.get("API_VERSION")
 SHOPIFY_PASS = os.environ.get("SHOPIFY_PASS")
 BUCKET = os.environ.get("BUCKET")
 PROJECT_NAME = os.environ.get("PROJECT_NAME")
-TABLE_NAME_PAY = os.environ.get("TABLE_NAME_PAY_PAY")
+TABLE_NAME_PAY = os.environ.get("TABLE_NAME_PAY")
 STORE_NAME = os.environ.get("STORE_NAME")
 
 
@@ -69,7 +70,7 @@ def get_new_payouts(last_id):
     return payout_df
 
 
-def main(data, context):
+def update_shopify_payout(data=None, context=None):
     """
     whole process from check the last payout, to make api calls until the data is updated, and save that data as a
     csv file in the bucket while uploading the same data to the orders table in BigQuery
@@ -80,9 +81,9 @@ def main(data, context):
     DELETE
         `{PROJECT_NAME}.Shopify.{TABLE_NAME_PAY}`
     WHERE
-        CAST(id as INTEGER) >= (
+        CAST(id AS INTEGER) >= (
     SELECT
-        MIN(CAST(id as INTEGER))
+        MIN(CAST(id AS INTEGER))
     FROM
         `{PROJECT_NAME}.Shopify.{TABLE_NAME_PAY}`
     WHERE
@@ -128,6 +129,13 @@ def main(data, context):
 
     if not isinstance(df, pd.DataFrame):
         return print("No new data to add")
+    if not isinstance(df, pd.DataFrame):
+        return (
+            json.dumps({"status": "no_update", "message": "No new data to add"}),
+            200,
+            {"Content-Type": "application/json"},
+        )
+
     # Clean data
 
     df = df.astype(
@@ -141,12 +149,18 @@ def main(data, context):
             "net": "float64",
             "processed_at": "datetime64[ns]",
             "adjustment_order_transactions": "str",
+            "adjustment_reason": "str",
         },
     )
 
     for col in df.columns:
         df[col] = df[col].map(
-            lambda x: None if x in ["nan", "", "None", "null", "NaN", "NAN"] else x
+            lambda x: (
+                None
+                if isinstance(x, str)
+                and x.lower() in ["nan", "none", "null", "na", "<na>", "<nan>", ""]
+                else x
+            )
         )
         df[col] = df[col].apply(
             lambda x: x.replace(".0", "") if isinstance(x, str) else x
@@ -159,17 +173,31 @@ def main(data, context):
     file_name = f"SHOPIFY_PAYOUTS_{today_date}_{result}_RAW.csv"
 
     ## Upload to BQ
-    df.to_gbq(
-        destination_table=f"Shopify.{TABLE_NAME_PAY}",
-        project_id=PROJECT_NAME,
-        progress_bar=False,
-        if_exists="append",
-    )  ### should be append
-
+    try:
+        df.to_gbq(
+            destination_table=f"Shopify.{TABLE_NAME_PAY}",
+            project_id=PROJECT_NAME,
+            progress_bar=False,
+            if_exists="append",
+        )  ### should be append
+    except Exception as e:
+        print(e)
+        return (
+            json.dumps(
+                {"status": "failure", "message": f"Uploaded failed with error {e}"}
+            ),
+            500,
+            {"Content-Type": "application/json"},
+        )
     ## Upload to bucket
 
     storage_client = storage.Client()
     bucket = storage_client.list_buckets().client.bucket(BUCKET)
     blob = bucket.blob(file_name)
     blob.upload_from_string(df.to_csv(index=False), content_type="csv/txt")
-    return
+
+    return (
+        json.dumps({"status": "success", "message": f"Uploaded {len(df)} records"}),
+        200,
+        {"Content-Type": "application/json"},
+    )
