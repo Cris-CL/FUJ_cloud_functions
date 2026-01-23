@@ -96,7 +96,7 @@ def get_transactions(id_list):
         response_in = requests.get(url)
         json_reponse = response_in.json()["transactions"]
         try:
-            json_filter = [txn for txn in json_reponse if txn["status"] == "success"]
+            json_filter = [txn for txn in json_reponse if txn["status"] == "success" and txn["kind"] == "sale"]
         except:
             print("Error json_filter")
             json_filter = json_reponse
