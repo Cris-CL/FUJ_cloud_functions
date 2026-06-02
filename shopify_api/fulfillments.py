@@ -95,12 +95,14 @@ def upload_fulfillments(df_fulf):
     try:
         colums_df = get_table_columns(FULFILLMENT_TABLE)
         df_fulf = df_fulf[colums_df].copy()
-        df_fulf.to_gbq(
-            destination_table=FULFILLMENT_TABLE,
-            project_id=PROJECT_NAME,
-            progress_bar=False,
-            if_exists="append",  ### should be append
+        bq_client = bigquery.Client()
+        job_config = bigquery.LoadJobConfig(write_disposition="WRITE_APPEND")
+        job = bq_client.load_table_from_dataframe(
+            df_fulf,
+            FULFILLMENT_TABLE,
+            job_config=job_config,
         )
+        job.result(timeout=120)
         print("Uploaded fulfillments")
     except Exception as e:
         print(f"Error in upload_fulfillments")
