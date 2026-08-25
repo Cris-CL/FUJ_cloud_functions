@@ -1,6 +1,22 @@
 import pandas as pd
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from orders_parameters import *
+
+
+def _session():
+    s = requests.Session()
+    retries = Retry(
+        total=3,
+        connect=3,
+        read=2,
+        backoff_factor=1,
+        allowed_methods=["GET"],
+        raise_on_status=False,
+    )
+    s.mount("https://", HTTPAdapter(max_retries=retries))
+    return s
 
 
 def get_all_orders(last_order_id):
@@ -26,9 +42,10 @@ def get_all_orders(last_order_id):
     fields = ",".join(fields_api)
 
     print(f"First order_id: {last}")
+    session = _session()
     while True:
         url = f"https://{SHOPIFY_KEY}:{SHOPIFY_PASS}@{STORE_NAME}.myshopify.com/admin/api/{API_VERSION}/orders.json?limit={limit}&fields={fields}&status={status}&since_id={last}"
-        response_in = requests.get(url)
+        response_in = session.get(url)
         try:
             df = pd.json_normalize(response_in.json()["orders"])
         except Exception as e:
@@ -90,15 +107,24 @@ def get_transactions(id_list):
     - trans_filter (pd.DataFrame): A dataframe with all the stripe/komoju transactions
     """
 
-    ids = []
+    # Phase 1: fetch all responses rapidly to keep the connection warm
+    raw_data = {}
+    session = _session()
     for order_id in set(id_list):
         url = f"https://{SHOPIFY_KEY}:{SHOPIFY_PASS}@{STORE_NAME}.myshopify.com/admin/api/{API_VERSION}/orders/{order_id}/transactions.json"
-        response_in = requests.get(url)
-        json_reponse = response_in.json()["transactions"]
+        try:
+            response_in = session.get(url, timeout=30)
+            raw_data[order_id] = response_in.json()["transactions"]
+        except Exception as e:
+            print(f"get_transactions: failed to fetch transactions for order_id={order_id}, skipping. Error: {e}")
+
+    # Phase 2: process all responses
+    ids = []
+    for order_id, json_reponse in raw_data.items():
         try:
             json_filter = [txn for txn in json_reponse if txn["status"] == "success" and txn["kind"] == "sale"]
-        except:
-            print("Error json_filter")
+        except Exception as e:
+            print(f"get_transactions: failed to filter transactions for order_id={order_id}, using raw response. Error: {e}")
             json_filter = json_reponse
 
         ch_results = find_ch_strings(json_filter)
@@ -197,6 +223,5 @@ def other_payments_process(df):
             transactions_komoju = get_transactions(komoju_list)
             df = join_orders_transactions(df, transactions_komoju)
     except Exception as e:
-        print(e, type(e))
-        print("Stripe process failed")
+        print(f"other_payments_process: failed processing stripe/komoju transactions. Error: {e}, type: {type(e)}")
     return df.copy()

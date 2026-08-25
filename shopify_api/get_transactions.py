@@ -9,8 +9,8 @@
 import os
 import requests
 import pandas as pd
-from google.cloud import bigquery
-from google.cloud import storage
+from google.cloud import bigquery, storage
+from google.api_core import retry as api_retry
 from datetime import datetime, date
 import shopify
 import json
@@ -39,8 +39,12 @@ def get_all_payouts(last_order_id):
     print(f"First order_id: {last}")
     while True:
         url = f"https://{SHOPIFY_KEY}:{SHOPIFY_PASS}@{STORE_NAME}.myshopify.com/admin/api/{API_VERSION}/shopify_payments/balance/transactions.json?limit={limit}&since_id={last}"
-        response_in = requests.get(url)
-        df = pd.json_normalize(response_in.json()["transactions"])
+        try:
+            response_in = requests.get(url, timeout=30)
+            df = pd.json_normalize(response_in.json()["transactions"])
+        except Exception as e:
+            print(f"get_all_payouts: failed to fetch transactions for since_id={last}. Error: {e}")
+            return transactions if len(transactions) > 0 else last
 
         # Function finishes with no new info
         if len(df) < 1:
@@ -98,8 +102,8 @@ def update_shopify_payout(data=None, context=None):
             query_job_0 = BQ.query(query_0)
             query_job_0.result()
         print("Removed pending transactions")
-    except:
-        print("Couldnt remove pending transactions")
+    except Exception as e:
+        print(f"update_shopify_payout: failed to remove pending transactions. Error: {e}")
 
     ## query select the id correspondig to the last order in the table
     query = f"""
@@ -122,8 +126,8 @@ def update_shopify_payout(data=None, context=None):
         query_job = bigquery_client.query(query)  # Make an API request.
         rows = query_job.result()  # Waits for query to finish
         result = list(rows)[0]["id"]  ## last id registered in pay table
-    except:
-        print("starting from first transaction")
+    except Exception as e:
+        print(f"update_shopify_payout: failed to get last transaction id, starting from 0. Error: {e}")
         result = 0
     df = get_all_payouts(result)  ## 2270011949127 --> Reference id that works
 
@@ -137,6 +141,9 @@ def update_shopify_payout(data=None, context=None):
         )
 
     # Clean data
+
+    # pandas 2.x: pre-convert timezone-aware datetime columns before astype
+    df["processed_at"] = pd.to_datetime(df["processed_at"], utc=True).dt.tz_convert(None)
 
     df = df.astype(
         {
@@ -174,17 +181,20 @@ def update_shopify_payout(data=None, context=None):
 
     ## Upload to BQ
     try:
-        df.to_gbq(
-            destination_table=f"Shopify.{TABLE_NAME_PAY}",
-            project_id=PROJECT_NAME,
-            progress_bar=False,
-            if_exists="append",
-        )  ### should be append
+        bq_client = bigquery.Client()
+        job_config = bigquery.LoadJobConfig(write_disposition="WRITE_APPEND")  ### should be append
+        job = bq_client.load_table_from_dataframe(
+            df,
+            f"{PROJECT_NAME}.Shopify.{TABLE_NAME_PAY}",
+            job_config=job_config,
+        )
+        job.result(timeout=120)
+        print("Data uploaded to BigQuery")
     except Exception as e:
-        print(e)
+        print(f"update_shopify_payout: failed to upload to BigQuery. Error: {e}, type: {type(e)}")
         return (
             json.dumps(
-                {"status": "failure", "message": f"Uploaded failed with error {e}"}
+                {"status": "failure", "message": f"Upload failed with error {e}"}
             ),
             500,
             {"Content-Type": "application/json"},
@@ -192,9 +202,13 @@ def update_shopify_payout(data=None, context=None):
     ## Upload to bucket
 
     storage_client = storage.Client()
-    bucket = storage_client.list_buckets().client.bucket(BUCKET)
+    bucket = storage_client.bucket(BUCKET)
     blob = bucket.blob(file_name)
-    blob.upload_from_string(df.to_csv(index=False), content_type="csv/txt")
+    blob.upload_from_string(
+        df.to_csv(index=False),
+        content_type="text/csv",
+        retry=api_retry.Retry(deadline=60),
+    )
 
     return (
         json.dumps({"status": "success", "message": f"Uploaded {len(df)} records"}),
