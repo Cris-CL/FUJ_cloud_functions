@@ -1,15 +1,19 @@
-# functions-framework==3.*
-# pandas==1.5.1
-# google-cloud-bigquery>=3.3.5
-# fsspec>=2022.11.0
-# gcsfs>=2022.11.0
-# pandas-gbq>=0.17.9
-# numpy>=1.23.4
+"""payment-rakuten Cloud Function.
+
+Triggered by a file upload (GCS finalize) on bucket rakuten_payment_raw and
+routed on the object name:
+
+- ``*_Shop_Billpay.csv``: 楽天ペイ Billpay statement (精算書) -> ``Rakuten.statement``
+- anything else:          楽天ペイ payment CSV -> ``Rakuten.payment_main`` + ``Rakuten.payment_coupon``
+
+Pinned dependencies: see requirements.txt. Deploy with deploy.sh.
+"""
 
 import os
 import functions_framework
 import pandas as pd
 import numpy as np
+from google.api_core.exceptions import NotFound
 from google.cloud import bigquery
 
 
@@ -122,21 +126,169 @@ def process_coupon_df(complete_df, ini):
     return df_coupon
 
 
+# --------------------------------------------------------------------------- #
+# 楽天ペイ Billpay statement (精算書)
+# --------------------------------------------------------------------------- #
+
+STATEMENT_SUFFIX = "_Shop_Billpay.csv"
+STATEMENT_ENCODING = "cp932"
+STATEMENT_EMPTY_VALUES = ("", "-")
+# 品目 of the line whose 精算対象期間終了日 is the deposit date (= report_id).
+# Older statements say 楽天ﾍﾟｲ_決済金, newer ones 楽天ﾍﾟｲ_決済金等: prefix match.
+DEPOSIT_LINE_PREFIX = "楽天ﾍﾟｲ_決済金"
+
+# (CSV header, BigQuery column, BigQuery type), in file order. The header of
+# every uploaded file must match this list exactly.
+STATEMENT_COLUMNS = [
+    ("発行日", "issue_date", "DATE"),
+    ("精算書No", "statement_number", "STRING"),
+    ("店舗別内訳書No", "store_statement_number", "STRING"),
+    ("店舗別ID", "store_id", "STRING"),
+    ("ＵＲＬ", "url", "STRING"),
+    ("店舗名", "store_name", "STRING"),
+    ("支払（税込額）", "payment_amount_tax_included", "FLOAT64"),
+    ("請求（税抜額）", "billing_amount_tax_excluded", "FLOAT64"),
+    ("請求（税額）", "billing_tax_amount", "FLOAT64"),
+    ("支払/請求分類", "payment_billing_category", "STRING"),
+    ("集約科目", "aggregate_subject", "STRING"),
+    ("品目", "subject_name", "STRING"),  # nomenclature key (集約科目名 in older files)
+    ("精算対象期間開始日", "period_start_date", "DATE"),
+    ("精算対象期間終了日", "period_end_date", "DATE"),
+    ("金額", "amount", "FLOAT64"),
+    ("うち消費税", "consumption_tax", "FLOAT64"),
+    ("税率", "tax_rate", "FLOAT64"),
+]
+STATEMENT_HEADER = [jp for jp, _, _ in STATEMENT_COLUMNS]
+STATEMENT_RENAME = {jp: en for jp, en, _ in STATEMENT_COLUMNS}
+STATEMENT_DATE_COLUMNS = [en for _, en, t in STATEMENT_COLUMNS if t == "DATE"]
+STATEMENT_NUMERIC_COLUMNS = [en for _, en, t in STATEMENT_COLUMNS if t == "FLOAT64"]
+STATEMENT_SCHEMA = [{"name": en, "type": t} for _, en, t in STATEMENT_COLUMNS] + [
+    {"name": "report_id", "type": "STRING"},
+    {"name": "FILE_NAME", "type": "STRING"},
+]
+
+
+class StatementError(ValueError):
+    """A Billpay statement file does not have the expected shape; nothing is uploaded."""
+
+
+def is_statement_file(name):
+    return name.endswith(STATEMENT_SUFFIX)
+
+
+def read_statement_csv(uri, file_name):
+    """Read a Billpay statement CSV as strings; '-' and '' become None."""
+    df = pd.read_csv(uri, encoding=STATEMENT_ENCODING, dtype=str, keep_default_na=False)
+    header = list(df.columns)
+    if header != STATEMENT_HEADER:
+        raise StatementError(
+            f"{file_name}: header does not match the {len(STATEMENT_HEADER)} expected "
+            f"columns.\n  got:      {header}\n  expected: {STATEMENT_HEADER}"
+        )
+    df = df.rename(columns=STATEMENT_RENAME)
+    df = df.applymap(lambda x: None if x in STATEMENT_EMPTY_VALUES else x)
+    return df
+
+
+def statement_report_id(df, file_name):
+    """report_id = 精算対象期間終了日 (YYYYMMDD) of the single 楽天ﾍﾟｲ_決済金* line."""
+    is_deposit = df["subject_name"].fillna("").str.startswith(DEPOSIT_LINE_PREFIX)
+    deposit = df[is_deposit]
+    if len(deposit) == 0:
+        raise StatementError(
+            f"{file_name}: no line with 品目 starting with '{DEPOSIT_LINE_PREFIX}'; "
+            "cannot derive report_id"
+        )
+    if len(deposit) > 1:
+        raise StatementError(
+            f"{file_name}: {len(deposit)} lines with 品目 starting with "
+            f"'{DEPOSIT_LINE_PREFIX}' ({deposit['subject_name'].tolist()}); expected exactly one"
+        )
+    end_date = deposit["period_end_date"].iloc[0]
+    if pd.isna(end_date):
+        raise StatementError(
+            f"{file_name}: the '{DEPOSIT_LINE_PREFIX}' line has no 精算対象期間終了日; "
+            "cannot derive report_id"
+        )
+    return end_date.strftime("%Y%m%d")
+
+
+def process_statement_df(df, file_name):
+    """Type the statement columns and add report_id and FILE_NAME."""
+    df = df.copy()
+    if df.empty:
+        raise StatementError(f"{file_name}: the statement has no lines")
+    for col in STATEMENT_NUMERIC_COLUMNS:
+        df[col] = pd.to_numeric(df[col].str.replace(",", "", regex=False)).astype("float64")
+    for col in STATEMENT_DATE_COLUMNS:
+        df[col] = pd.to_datetime(df[col], format="%Y/%m/%d")
+    statement_numbers = df["statement_number"].dropna().unique().tolist()
+    if len(statement_numbers) != 1:
+        raise StatementError(
+            f"{file_name}: expected one 精算書No in the file, got {statement_numbers}"
+        )
+    df["report_id"] = statement_report_id(df, file_name)
+    df["FILE_NAME"] = file_name
+    return df
+
+
+def statement_already_loaded(statement_number):
+    """True when the destination table already holds lines of this 精算書No."""
+    dataset_id = os.environ.get("DATASET_ID")
+    table_3 = os.environ.get("TABLE_ID_3")
+    client = bigquery.Client()
+    job = client.query(
+        f"SELECT COUNT(*) AS n FROM `{dataset_id}.{table_3}` "
+        "WHERE statement_number = @statement_number",
+        job_config=bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("statement_number", "STRING", statement_number)
+            ]
+        ),
+    )
+    try:
+        rows = list(job.result())
+    except NotFound:
+        return False  # table not created yet: nothing loaded
+    return rows[0]["n"] > 0
+
+
+def update_statement(uri, file_name):
+    df_statement = process_statement_df(read_statement_csv(uri, file_name), file_name)
+    statement_number = df_statement["statement_number"].iloc[0]
+    report_id = df_statement["report_id"].iloc[0]
+    if statement_already_loaded(statement_number):
+        raise StatementError(
+            f"{file_name}: statement {statement_number} is already loaded; "
+            "delete its rows from the statement table before loading it again"
+        )
+    upload_df(df_statement, "statement")
+    print(
+        f"statement {statement_number}: {len(df_statement)} lines uploaded "
+        f"with report_id {report_id}"
+    )
+    return
+
+
 def upload_df(df, df_name):
 
     dataset_id = os.environ.get("DATASET_ID")
     table_1 = os.environ.get("TABLE_ID_1")
     table_2 = os.environ.get("TABLE_ID_2")
+    table_3 = os.environ.get("TABLE_ID_3")
 
     df_destination = {
         "main": f"{dataset_id}.{table_1}",
         "coupon": f"{dataset_id}.{table_2}",
+        "statement": f"{dataset_id}.{table_3}",
     }
+    table_schema = STATEMENT_SCHEMA if df_name == "statement" else None
     try:
         df.to_gbq(
             destination_table=df_destination[df_name],
             if_exists="append",
             progress_bar=False,
+            table_schema=table_schema,
         )
         print(f"{df_name} dataframe correctly uploaded")
     except Exception as err:
@@ -154,6 +306,10 @@ def update_payment(cloud_event):
     print(name)
 
     uri = f"gs://{bucket}/{name}"
+
+    if is_statement_file(name):
+        update_statement(uri, name)
+        return
 
     complete_df = get_complete_dataframe(uri)
     df_comp = complete_df[0]
