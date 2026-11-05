@@ -7,8 +7,9 @@
 --   * 金額 = ROUND(|金額| x 1.1, 2) and 税額 = ROUND(|金額| x 0.1, 2); no tax when 税区分 = 対象外.
 --     An unknown 品目 gets 勘定科目 = MISSING NOMENCLATURE {...} and 10% tax, like the sheet; the row is kept.
 -- Same column set as free.rakuten_report_full so both tables read the same way. The dedup by
--- control_number is done by scheduled query FUJ_Rakuten_cost_freee, not here, so the function can be
--- used to re-check a deposit after it was materialised.
+-- control_number is done by the append step (05_materialise_cost_rows.sql, run by the Cloud Function
+-- after each statement load), not here, so the function can be used to re-check a deposit after it
+-- was materialised.
 -- 決済日 is not stored (as for the sales rows): at export it is PARSE_DATE('%Y%m%d', control_number).
 CREATE OR REPLACE TABLE FUNCTION `test-bigquery-cc.FUJ_scheduled.rakuten_cost_report`()
 AS

@@ -3,7 +3,9 @@
 Triggered by a file upload (GCS finalize) on bucket rakuten_payment_raw and
 routed on the object name:
 
-- ``*_Shop_Billpay.csv``: 楽天ペイ Billpay statement (精算書) -> ``Rakuten.statement``
+- ``*_Shop_Billpay.csv``: 楽天ペイ Billpay statement (精算書) -> ``Rakuten.statement``, then the
+  freee cost rows of every deposit not yet written are appended to ``free.rakuten_cost_full``
+  (built by ``FUJ_scheduled.rakuten_cost_report()``, one deposit written once)
 - anything else:          楽天ペイ payment CSV -> ``Rakuten.payment_main`` + ``Rakuten.payment_coupon``
 
 Pinned dependencies: see requirements.txt. Deploy with deploy.sh.
@@ -136,6 +138,8 @@ STATEMENT_EMPTY_VALUES = ("", "-")
 # 品目 of the line whose 精算対象期間終了日 is the deposit date (= report_id).
 # Older statements say 楽天ﾍﾟｲ_決済金, newer ones 楽天ﾍﾟｲ_決済金等: prefix match.
 DEPOSIT_LINE_PREFIX = "楽天ﾍﾟｲ_決済金"
+# Table function that builds the freee cost rows from the statement lines (queries_bq/rakuten_cost/03).
+COST_REPORT_ROUTINE = "FUJ_scheduled.rakuten_cost_report"
 
 # (CSV header, BigQuery column, BigQuery type), in file order. The header of
 # every uploaded file must match this list exactly.
@@ -253,6 +257,36 @@ def statement_already_loaded(statement_number):
     return rows[0]["n"] > 0
 
 
+def materialise_cost_rows():
+    """Append the freee cost rows of every deposit not yet in the cost table.
+
+    Same query as queries_bq/rakuten_cost/05_materialise_cost_rows.sql: a deposit
+    (control_number) is written once, so re-running it appends nothing.
+    """
+    cost_table = f"{os.environ.get('COST_DATASET_ID')}.{os.environ.get('COST_TABLE_ID')}"
+    query = f"""
+INSERT INTO `{cost_table}`
+SELECT
+  *
+FROM
+  {COST_REPORT_ROUTINE}()
+WHERE
+  control_number IS NOT NULL AND amount <> 0
+AND
+  control_number NOT IN (
+    SELECT DISTINCT
+      control_number
+    FROM
+      `{cost_table}`
+    WHERE
+      control_number IS NOT NULL
+  )"""
+    job = bigquery.Client().query(query)
+    job.result()
+    print(f"{job.num_dml_affected_rows} cost rows appended to {cost_table}")
+    return job.num_dml_affected_rows
+
+
 def update_statement(uri, file_name):
     df_statement = process_statement_df(read_statement_csv(uri, file_name), file_name)
     statement_number = df_statement["statement_number"].iloc[0]
@@ -267,6 +301,7 @@ def update_statement(uri, file_name):
         f"statement {statement_number}: {len(df_statement)} lines uploaded "
         f"with report_id {report_id}"
     )
+    materialise_cost_rows()
     return
 
 

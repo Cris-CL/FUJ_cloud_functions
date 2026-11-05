@@ -23,4 +23,4 @@ gcloud functions deploy payment-rakuten \
   --memory 512Mi \
   --timeout 60s \
   --max-instances 1000 \
-  --set-env-vars DATASET_ID=Rakuten,TABLE_ID_1=payment_main,TABLE_ID_2=payment_coupon,TABLE_ID_3=statement
+  --set-env-vars DATASET_ID=Rakuten,TABLE_ID_1=payment_main,TABLE_ID_2=payment_coupon,TABLE_ID_3=statement,COST_DATASET_ID=free,COST_TABLE_ID=rakuten_cost_full
