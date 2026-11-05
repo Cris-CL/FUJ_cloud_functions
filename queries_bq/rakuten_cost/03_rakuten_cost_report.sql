@@ -7,7 +7,8 @@
 --     An unknown 品目 gets 勘定科目 = MISSING NOMENCLATURE {...}; the row is kept.
 -- Tax, whole yen, reconciled to the statement (differs from the sheet, which rounded each line and was
 -- 1-2 yen off the statement):
---   * taxable = the statement's own 税率 column (10 -> 10%, 0 -> none), not the nomenclature
+--   * taxable = the statement's own 税率 column (10 -> 10%, 0 -> none); when the file gives no 税率 (-),
+--     the nomenclature decides (税区分 対象外 -> none, anything else -> 10%), as the sheet did
 --   * Rakuten invoices one 消費税 line computed on the statement total (truncated). Each line gets
 --     FLOOR(税抜 x 税率) and the remaining yen go, one each, to the lines with the largest fractional
 --     parts (largest remainder) until the per-line taxes add up to that 消費税 line. When a statement
@@ -28,7 +29,11 @@ WITH cost_lines AS (
     st.period_end_date,
     st.billing_amount_tax_excluded,
     CAST(st.amount AS NUMERIC) AS base_amount,                 -- signed, tax exclusive
-    CAST(IFNULL(st.tax_rate, 0) AS NUMERIC) / 100 AS rate,
+    CASE
+      WHEN st.tax_rate IS NOT NULL THEN CAST(st.tax_rate AS NUMERIC) / 100
+      WHEN nom.tax_distinction = '対象外' THEN 0
+      ELSE 0.1
+    END AS rate,
     nom.remarks,
     nom.item,
     nom.tax_distinction,

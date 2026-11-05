@@ -5,6 +5,7 @@
 --   diff_tax          : statement 消費税 line - sum of the cost rows' tax
 --   rate_mismatch     : cost lines whose statement 税率 (0 / 10) disagrees with the nomenclature 税区分
 --                       (対象外 / taxable); the tax follows the statement, the freee 税区分 the nomenclature
+--   rate_from_nomenclature : cost lines with no 税率 in the file (-), where the nomenclature decided the tax
 --   status            : OK / MISMATCH / NOT MATERIALISED (cost lines exist but no rows yet) / NO COST LINES
 CREATE OR REPLACE TABLE FUNCTION `test-bigquery-cc.FUJ_test.check_rakuten_cost`()
 AS
@@ -15,8 +16,9 @@ WITH statement_totals AS (
     SUM(IF(st.payment_billing_category = '請求', st.billing_amount_tax_excluded, 0)) AS statement_tax_excluded,
     SUM(IF(st.payment_billing_category = '請求', st.billing_tax_amount, 0)) AS statement_tax,
     COUNTIF(st.billing_amount_tax_excluded <> 0) AS statement_cost_lines,
-    COUNTIF(st.billing_amount_tax_excluded <> 0
-            AND (IFNULL(st.tax_rate, 0) = 0) <> (nom.tax_distinction = '対象外')) AS rate_mismatch
+    COUNTIF(st.billing_amount_tax_excluded <> 0 AND st.tax_rate IS NOT NULL
+            AND (st.tax_rate = 0) <> (nom.tax_distinction = '対象外')) AS rate_mismatch,
+    COUNTIF(st.billing_amount_tax_excluded <> 0 AND st.tax_rate IS NULL) AS rate_from_nomenclature
   FROM
     `Rakuten.statement` AS st
   LEFT JOIN
@@ -50,6 +52,7 @@ SELECT
   ct.cost_rows,
   ct.missing_nomenclature,
   st.rate_mismatch,
+  st.rate_from_nomenclature,
   CASE
     WHEN st.statement_cost_lines = 0 THEN 'NO COST LINES'
     WHEN ct.control_number IS NULL THEN 'NOT MATERIALISED'
