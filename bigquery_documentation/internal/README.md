@@ -78,8 +78,8 @@ Details and failure checks: [scheduled_queries.md](scheduled_queries.md).
    (Cloud Function `payment-rakuten`, routed on `_Shop_Billpay.csv`), `Rakuten.cost_nomenclature` replaces the sheet
    tab, `FUJ_scheduled.rakuten_cost_report()` builds the fee rows and the function appends them to
    `free.rakuten_cost_full` (a separate table: the sales dedup by control_number would skip them). Still by hand:
-   copying the deposit's rows into the monthly tab and 決済日. Open: whether freee gets the 2-decimal amounts or the
-   rounded yen (rakuten.md section 8).
+   copying the deposit's rows into the monthly tab and 決済日. Amounts are whole yen, taxes allocated to the
+   statement's 消費税 line (rakuten.md section 4).
 3. **Idempotency for re-uploaded Amazon files.** Note: the owner's working assumption is that the
    "already on the table" branch in `amazon/amazon_process.py` is commented out. In the repository version
    (last change `b7dff95` "latest deployed", 2025-01-21; unchanged at HEAD) the branch is **active**: a file whose

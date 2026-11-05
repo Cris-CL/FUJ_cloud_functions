@@ -193,11 +193,11 @@ Definition: `queries_bq/rakuten_cost/03_rakuten_cost_report.sql`.
 
 - Source `Rakuten.statement` LEFT JOIN `Rakuten.cost_nomenclature` ON `subject_name` (exact match, no normalisation). Only lines with `billing_amount_tax_excluded <> 0`: payment (支払), deduction (支払控除) and 消費税 lines are skipped, as in the sheet.
 - `balance` = `支出` when 請求（税抜額） > 0, `収入` when < 0; `control_number` = `report_id`; `order_date` = 精算対象期間終了日; `supplier = 'Rakuten'`; `payment_date` NULL; `tax_calculation_distinction = '内税'`.
-- `amount` = `ROUND(|金額| x 1.1, 2)`, `tax_amount` = `ROUND(|金額| x 0.1, 2)`; no tax when `tax_distinction = '対象外'`. `real_amount` is signed (negative for 支出).
-- Unknown 品目: `account = 'MISSING NOMENCLATURE {subject_name:...}'`, NULL tax / item / remarks, 10% tax added (sheet behaviour); the row is kept.
+- Tax in whole yen, reconciled to the statement (this is where it departs from the sheet, which rounded each line and was 1-2 yen off): taxable means the statement's own 税率 column is 10 (0 for the ﾎﾟｲﾝﾄ付与料 lines). Rakuten invoices one 消費税 line computed on the statement total and truncated; each line gets `FLOOR(税抜 x 税率)` and the remaining yen go, one each, to the lines with the largest fractional parts (largest remainder) until the per-line taxes add up to that 消費税 line. `amount` = 税抜 + tax, `tax_amount` = tax, `real_amount` signed (negative for 支出); per deposit `SUM(amount)` equals the statement's 請求 total exactly. Without a 請求 消費税 line the target is `TRUNC(sum of exact taxes)`.
+- Unknown 品目: `account = 'MISSING NOMENCLATURE {subject_name:...}'`, NULL 税区分 / item / remarks; the tax still follows the statement's 税率; the row is kept.
 - `order_id` = 精算書No, `product_name` = statement 品目, `full_date` = 発生日 as DATETIME; `item_number`, `quantity`, `zip_code` NULL.
 - No dedup inside the function (a deposit can be re-checked after it was written); the append step does it.
-- Verified on 2026-11-05 against sheet `RAK_PAYMENT` for 管理番号 20260910 and 20261010: 46 rows, every column equal; amounts equal the sheet formula to the cent (the sheet's CSV export shows them rounded to the yen).
+- Verified on 2026-11-05 against sheet `RAK_PAYMENT` for 管理番号 20260910 and 20261010: 46 rows, same rows, same 収支区分 / 発生日 / 勘定科目 / 税区分 / 備考 / 品目; per-line taxes equal the sheet's rounded values except on the lines that absorb the remainder (1 yen each), and the totals equal the statement's 消費税 and 請求 totals exactly, which the sheet's did not.
 
 ### Append step (cost chain, no scheduled query)
 
@@ -239,7 +239,7 @@ Right after a statement lands, Cloud Function `payment-rakuten` runs the query r
 
 ### `free.rakuten_cost_full` (cost rows, 2026-11)
 
-Same 19 columns and types as `free.rakuten_report_full` (`queries_bq/rakuten_cost/04_rakuten_cost_full.sql`), kept in a separate table because the sales dedup by `control_number` would skip the cost rows of deposits already written. 46 rows on 2026-11-05 (deposits 20260910 and 20261010, both booked in freee from the sheet before this table existed). For cost rows: `account` is 支払手数料 / 広告宣伝費 / 荷造運賃 (or `MISSING NOMENCLATURE {...}`), `remarks` and `item` come from the nomenclature, `order_id` = 精算書No, `product_name` = statement 品目, `item_number` / `quantity` / `zip_code` are NULL.
+Same 19 columns and types as `free.rakuten_report_full` (`queries_bq/rakuten_cost/04_rakuten_cost_full.sql`), kept in a separate table because the sales dedup by `control_number` would skip the cost rows of deposits already written. Amounts are whole yen. 46 rows on 2026-11-05 (deposits 20260910 and 20261010, both booked in freee from the sheet before this table existed). For cost rows: `account` is 支払手数料 / 広告宣伝費 / 荷造運賃 (or `MISSING NOMENCLATURE {...}`), `remarks` and `item` come from the nomenclature, `order_id` = 精算書No, `product_name` = statement 品目, `item_number` / `quantity` / `zip_code` are NULL.
 
 ## 6. `FUJ_sheets.rakuten_long()` and `FUJ_sheets.rakuten_short()`
 
@@ -339,7 +339,7 @@ Formulas build the freee columns in R..AE:
 
 Example: 集約科目名 `ｼｽﾃﾑ利用料_PC`, 金額 29,801 (tax exclusive) -> 支出, 支払手数料, 課対仕入10%, 金額 32,781, 税額 2,980, 備考 `System Usage`, 品目 `Fee Rakuten`.
 
-The rows with a 収支区分 for the deposit are copied into the monthly tab, completed with 決済日 (from 管理番号), 決済口座 `Rakuten` and 決済金額 (= 金額). Amounts can have 2 decimals from the formula; whether they are rounded before upload is to confirm with the owner (`free.rakuten_cost_full` keeps the 2 decimals).
+The rows with a 収支区分 for the deposit are copied into the monthly tab, completed with 決済日 (from 管理番号), 決済口座 `Rakuten` and 決済金額 (= 金額). Amounts can have 2 decimals from the formula, and the per-line rounding left the total 1-2 yen off the statement; `free.rakuten_cost_full` uses whole yen allocated to the statement's 消費税 line instead (section 4).
 
 `Rakuten.cost_nomenclature` (seeded by `queries_bq/rakuten_cost/02_rakuten_cost_nomenclature.sql` from tab `cost_nomenclature` of the sheet) maps the statement 品目 (`subject_name`; called 集約科目名 in the older 16-column layout) to the freee columns: `subject_name`, `remarks` (備考), `item` (品目), `tax_distinction` (税区分), `account` (勘定科目), `translation`, `ADDED_DATETIME`. Full mapping (36 rows as provided by the owner on 2026-10-16, plus row 37 added on 2026-11-05):
 
@@ -401,7 +401,7 @@ SUM(Rakuten.payment_main.rakuten_pay_money) + SUM(Rakuten.payment_coupon.coupon_
 
 This check exists as `FUJ_test.check_rakuten_freee()` (test dataset). Whether the owner uses it or only the `PT` tab is to confirm with the owner.
 
-Cost side: `FUJ_test.check_rakuten_cost()` (`queries_bq/rakuten_cost/06_check_rakuten_cost.sql`) compares, per deposit, the 請求 total of the statement with the rows in `free.rakuten_cost_full`. `diff_tax_excluded` must be 0 (`status` = `OK`); `diff_tax` is the per-line rounding of the 10% tax against the statement's single 消費税 line (0.4 and 0.8 yen on the first two deposits); `NOT MATERIALISED` means the statement has cost lines but no rows were appended; `NO COST LINES` is a statement with no 請求 line.
+Cost side: `FUJ_test.check_rakuten_cost()` (`queries_bq/rakuten_cost/06_check_rakuten_cost.sql`) compares, per deposit, the 請求 total of the statement with the rows in `free.rakuten_cost_full`. `diff_tax_excluded` and `diff_tax` (against the statement's 消費税 line) must both be 0 (`status` = `OK`); `rate_mismatch` counts cost lines whose statement 税率 disagrees with the nomenclature 税区分 (expected 0); `NOT MATERIALISED` means the statement has cost lines but no rows were appended; `NO COST LINES` is a statement with no 請求 line.
 
 ## 8. Known pitfalls and manual steps
 
@@ -411,7 +411,7 @@ Cost side: `FUJ_test.check_rakuten_cost()` (`queries_bq/rakuten_cost/06_check_ra
 - **Do not upload a Billpay statement before the function that routes on `_Shop_Billpay.csv` is deployed**: the previous code would read it as a payment file.
 - **A statement is loaded once.** Uploading the same 精算書No again is refused; to reload, delete its lines from `Rakuten.statement` and the deposit from `free.rakuten_cost_full` first. Two statements with the same deposit date would share a `report_id` and only the first one's cost rows would be written.
 - **New 品目 in a statement** gives a `MISSING NOMENCLATURE` row (kept, not dropped): add it to `Rakuten.cost_nomenclature` and rebuild the deposit.
-- **Rounding of cost rows:** `free.rakuten_cost_full` keeps 2 decimals (`ROUND(x 1.1, 2)` like the sheet); whether freee receives the rounded yen is to confirm with the owner. The sheet's 発生日 cell is blank for the 17-column statements (its formula seems tied to the old column layout); the routine uses 精算対象期間終了日 as documented.
+- **Cost rows are whole yen** and their taxes add up to the statement's 消費税 line (section 4), unlike the sheet's per-line rounding; a line can therefore differ from the sheet by 1 yen. The sheet's 発生日 cell is blank for the 17-column statements (its formula seems tied to the old column layout); the routine uses 精算対象期間終了日 as documented.
 - **決済日 is empty in BigQuery**; it must be derived from 管理番号 for every row, including fee rows.
 - **New Rakuten item numbers or multi-variant listings** need a row in `free.sku_master` (store `Rakuten`) and, for variant listings, possibly a new remapping rule in `FUJ_extra.Rakuten_full()`.
 - Cancelled orders (`status = '900'`) keep product lines; delivery and coupon lines are zeroed.

@@ -23,7 +23,8 @@ two 楽天ペイ CSV files into BigQuery. It is triggered by every file uploaded
 4. The cost rows are in `free.rakuten_cost_full` right away (a statement with no 請求 line appends 0
    rows). The sales rows follow the Saturday run of `FUJ_Rakuten_freee` as before.
 5. `SELECT * FROM FUJ_test.check_rakuten_cost()` must show `OK` for the deposit
-   (`diff_tax_excluded` = 0; `diff_tax` below 1 yen is per-line rounding). `MISSING NOMENCLATURE` in
+   (`diff_tax_excluded` = 0 and `diff_tax` = 0: the whole-yen cost rows add up to the statement's 請求
+   total and 消費税 line exactly). `MISSING NOMENCLATURE` in
    `free.rakuten_cost_full.account` means a new 品目: add it (next section), then rebuild that deposit's
    cost rows (see "Reloading").
 
