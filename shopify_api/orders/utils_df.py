@@ -186,6 +186,13 @@ def type_change(df):
             else:
                 df[cols_db] = None
 
+    # pandas 2.x raises ValueError when casting tz-aware strings to datetime64[ns].
+    # Convert datetime columns to UTC then strip timezone before astype().
+    datetime_cols = {col for col, dtype in dict_types.items() if "datetime" in str(dtype)}
+    for col in datetime_cols:
+        if col in df.columns:
+            df[col] = pd.to_datetime(df[col], utc=True).dt.tz_convert(None)
+
     df = df.astype(dict_types)
     ## Delete nan strings or empty values
     for col in df.columns:

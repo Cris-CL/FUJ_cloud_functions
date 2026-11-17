@@ -1,6 +1,6 @@
-from google.cloud import bigquery
+from google.cloud import bigquery, storage
+from google.api_core import retry as api_retry
 from orders_parameters import *
-from google.cloud import storage
 from datetime import datetime
 
 def upload_to_bq(df, today_date, result):
@@ -20,22 +20,28 @@ def upload_to_bq(df, today_date, result):
     """
 
     try:
-        df.to_gbq(
-            destination_table=TABLE_NAME,
-            project_id=PROJECT_NAME,
-            progress_bar=False,
-            if_exists="append",  ### should be append
+        bq_client = bigquery.Client()
+        job_config = bigquery.LoadJobConfig(write_disposition="WRITE_APPEND")
+        job = bq_client.load_table_from_dataframe(
+            df,
+            f"{PROJECT_NAME}.{TABLE_NAME}",
+            job_config=job_config,
         )
+        job.result(timeout=120)
         print("Data uploaded to BigQuery")
     except Exception as e:
         print("Couldn't upload data to BigQuery table, with error:")
         print(e, type(e))
         print("Saving data to bucket")
         storage_client = storage.Client()
-        bucket = storage_client.list_buckets().client.bucket(BUCKET)
+        bucket = storage_client.bucket(BUCKET)
         file_name = f"SH_problem_data_{today_date}_{result}_RAW.csv"
         blob = bucket.blob(file_name)
-        blob.upload_from_string(df.to_csv(index=False), content_type="csv/txt")
+        blob.upload_from_string(
+            df.to_csv(index=False),
+            content_type="text/csv",
+            retry=api_retry.Retry(deadline=60),
+        )
     return
 
 
@@ -145,8 +151,12 @@ def backup_deleted_orders(file_name_deleted,df_deleted):
     print("Saving to bucket last 2 weeks of orders")
 
     storage_client = storage.Client()
-    bucket = storage_client.list_buckets().client.bucket(BUCKET)
+    bucket = storage_client.bucket(BUCKET)
     blob = bucket.blob(file_name_deleted)
-    blob.upload_from_string(df_deleted.to_csv(index=False), content_type="csv/txt")
+    blob.upload_from_string(
+        df_deleted.to_csv(index=False),
+        content_type="text/csv",
+        retry=api_retry.Retry(deadline=60),
+    )
 
     return

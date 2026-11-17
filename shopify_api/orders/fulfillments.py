@@ -3,6 +3,22 @@ from ratelimit import limits
 from google.cloud import bigquery
 import pandas as pd
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
+
+def _session():
+    s = requests.Session()
+    retries = Retry(
+        total=3,
+        connect=3,
+        read=2,
+        backoff_factor=1,
+        allowed_methods=["GET"],
+        raise_on_status=False,
+    )
+    s.mount("https://", HTTPAdapter(max_retries=retries))
+    return s
 
 
 @limits(calls=100, period=1)
@@ -18,26 +34,32 @@ def get_fullfillments(order_id_list):
     Returns:
     - fulfillments (pd.DataFrame): A dataframe with all the fulfillments from the shopify store
     """
-    fullfillments = pd.DataFrame()
+    # Phase 1: fetch all responses rapidly to keep the connection warm
+    raw_data = {}
+    session = _session()
     try:
         for order_id in order_id_list:
             url = f"https://{SHOPIFY_KEY}:{SHOPIFY_PASS}@{STORE_NAME}.myshopify.com/admin/api/{API_VERSION}/orders/{order_id}/fulfillments.json"
-            response_in = requests.get(url)
             try:
-                df = pd.json_normalize(response_in.json()["fulfillments"])
+                response_in = session.get(url, timeout=30)
+                raw_data[order_id] = response_in.json()["fulfillments"]
             except Exception as e:
-                print("get_fullfillments failed with error:")
-                print(e, type(e))
-                return fullfillments
-            fullfillments = pd.concat([fullfillments, df], ignore_index=True)
-
-            # Function finishes with no new info
-        if len(fullfillments) < 1:
-            print("Api didnt provide new fulfillment data")
-            return fullfillments
+                print(f"get_fullfillments: failed to fetch fulfillments for order_id={order_id}, skipping. Error: {e}")
     except Exception as e:
-        print(f"Error in get_fullfillments")
+        print(f"get_fullfillments: unexpected error during fetch phase. Error: {e}, type: {type(e)}")
         raise e
+
+    # Phase 2: normalize and concat all responses
+    fullfillments = pd.DataFrame()
+    for order_id, fulfillment_data in raw_data.items():
+        try:
+            df = pd.json_normalize(fulfillment_data)
+            fullfillments = pd.concat([fullfillments, df], ignore_index=True)
+        except Exception as e:
+            print(f"get_fullfillments: failed to normalize fulfillments for order_id={order_id}, skipping. Error: {e}")
+
+    if len(fullfillments) < 1:
+        print("Api didnt provide new fulfillment data")
     return fullfillments
 
 
@@ -83,7 +105,7 @@ def get_table_columns(table_id):
             table_c = client.get_table(table_id)
             rows_order_database = [x.name for x in table_c.schema]
     except Exception as e:
-        print(f"Error in get_table_columns")
+        print(f"get_table_columns: failed to fetch schema for table {table_id}. Error: {e}, type: {type(e)}")
         raise e
     return rows_order_database
 
@@ -95,14 +117,16 @@ def upload_fulfillments(df_fulf):
     try:
         colums_df = get_table_columns(FULFILLMENT_TABLE)
         df_fulf = df_fulf[colums_df].copy()
-        df_fulf.to_gbq(
-            destination_table=FULFILLMENT_TABLE,
-            project_id=PROJECT_NAME,
-            progress_bar=False,
-            if_exists="append",  ### should be append
+        bq_client = bigquery.Client()
+        job_config = bigquery.LoadJobConfig(write_disposition="WRITE_APPEND")
+        job = bq_client.load_table_from_dataframe(
+            df_fulf,
+            FULFILLMENT_TABLE,
+            job_config=job_config,
         )
+        job.result(timeout=120)
         print("Uploaded fulfillments")
     except Exception as e:
-        print(f"Error in upload_fulfillments")
+        print(f"upload_fulfillments: failed to upload to table {FULFILLMENT_TABLE}. Error: {e}, type: {type(e)}")
         raise e
     return True
