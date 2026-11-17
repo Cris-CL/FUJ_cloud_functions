@@ -8,6 +8,9 @@ routed on the object name:
   (built by ``FUJ_scheduled.rakuten_cost_report()``, one deposit written once)
 - anything else:          楽天ペイ payment CSV -> ``Rakuten.payment_main`` + ``Rakuten.payment_coupon``
 
+A file that loaded is then moved to ``gs://fujiorg-sales-data/Rakuten/<YYYY>/deals|billpay/``
+(``archive_object_name``); a file that failed stays in rakuten_payment_raw.
+
 Pinned dependencies: see requirements.txt. Deploy with deploy.sh.
 """
 

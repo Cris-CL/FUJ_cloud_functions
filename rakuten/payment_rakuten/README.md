@@ -2,7 +2,9 @@
 
 Cloud Function (Gen 2, python314, project `test-bigquery-cc`, region `us-central1`) that loads the
 two 楽天ペイ CSV files into BigQuery. It is triggered by every file uploaded to bucket
-`rakuten_payment_raw` and routes on the file name.
+`rakuten_payment_raw` and routes on the file name. A file that loads is then moved to the archive
+(`gs://fujiorg-sales-data/Rakuten/`, see "Where files end up"), so **`rakuten_payment_raw` only holds
+files that failed**.
 
 | File you download from 楽天ペイ | Name must | Lands in | Then |
 |---|---|---|---|
@@ -18,8 +20,10 @@ two 楽天ペイ CSV files into BigQuery. It is triggered by every file uploaded
    period as well (other function, see `bigquery_documentation/rakuten.md`).
 3. Check the function log in Cloud Logging (function `payment-rakuten`). A statement load ends with
    `statement <精算書No>: <n> lines uploaded with report_id <YYYYMMDD>` followed by
-   `<n> cost rows appended to free.rakuten_cost_full`. A failed load writes nothing; the message says
-   why (see "Errors").
+   `<n> cost rows appended to free.rakuten_cost_full`; a payment file ends with `End upload process`.
+   Both then log `archived gs://rakuten_payment_raw/<name> -> gs://fujiorg-sales-data/Rakuten/...`.
+   A failed load writes nothing and the file stays in `rakuten_payment_raw`; the message says why
+   (see "Errors").
 4. The cost rows are in `free.rakuten_cost_full` right away (a statement with no 請求 line appends 0
    rows). The sales rows follow the Saturday run of `FUJ_Rakuten_freee` as before.
 5. `SELECT * FROM FUJ_test.check_rakuten_cost()` must show `OK` for the deposit
@@ -27,6 +31,26 @@ two 楽天ペイ CSV files into BigQuery. It is triggered by every file uploaded
    total and 消費税 line exactly). `MISSING NOMENCLATURE` in
    `free.rakuten_cost_full.account` means a new 品目: add it (next section), then rebuild that deposit's
    cost rows (see "Reloading").
+
+## Where files end up
+
+| File | Archived as (bucket `fujiorg-sales-data`) |
+|---|---|
+| Payment CSV `FUJ_YYYY00_Rakuten Deals - YYYYMMDD.csv` | `Rakuten/<YYYY>/deals/Rakuten Deals - YYYYMMDD.csv` (the `FUJ_YYYY00_` prefix is dropped; the year is the one of the date at the end of the name, not of the prefix) |
+| Billpay statement `..._Shop_Billpay.csv` | `Rakuten/<YYYY>/billpay/Billpay_<report_id>.csv` (report_id = deposit date, below) |
+
+- The file is moved (copied, then deleted from `rakuten_payment_raw`) only after everything succeeded:
+  for a statement that includes the cost-row append.
+- An archive object is never overwritten: if the destination already exists the file stays in
+  `rakuten_payment_raw` and the log says so.
+- A payment file whose name has no ` - YYYYMMDD.csv` date is loaded but cannot be archived: it stays
+  in `rakuten_payment_raw` with a log line. Do not upload it again (payment files are not
+  deduplicated); rename it in the archive by hand.
+- Anything in `rakuten_payment_raw` therefore needs attention: read its log line in Cloud Logging.
+- Files loaded before the archive existed were moved once by `backfill_archive.py` (dry run by
+  default, `--apply` to move; it only moves files whose data is in BigQuery). The 楽天 file
+  `FUJ_202400_Rakuten Deals - 20241005.csv` was misnamed (Deals settle on the 10th and 25th; its rows
+  are `report_id` 20241010) and is archived as `Rakuten/2024/deals/Rakuten Deals - 20241010.csv`.
 
 ### report_id of a statement
 
@@ -42,6 +66,9 @@ It is the deposit date and matches `Rakuten.payment_main.report_id` of the payme
 
 If the statement landed but the append step failed (BigQuery error in the log), the deposit is picked
 up by the next statement upload, or run `queries_bq/rakuten_cost/05_materialise_cost_rows.sql` by hand.
+The file stays in `rakuten_payment_raw`, but uploading it again fails with "already loaded": after
+the cost rows are in, move it to the archive by hand
+(`gcloud storage mv gs://rakuten_payment_raw/<name> gs://fujiorg-sales-data/Rakuten/<YYYY>/billpay/Billpay_<report_id>.csv`).
 
 ## Adding a 品目 to the nomenclature
 
@@ -98,4 +125,8 @@ The parser can be run on local files with the same code:
 import os, sys; sys.path.insert(0, "rakuten/payment_rakuten")
 import main
 df = main.process_statement_df(main.read_statement_csv(path, name), name)   # raises StatementError on a bad file
+main.archive_object_name(name, report_id)   # where the file would be archived
 ```
+
+Runtime python314 with pandas 3: write to BigQuery with `pandas_gbq.to_gbq(df, ...)` (pandas 3 has no
+`DataFrame.to_gbq`), and payment CSVs are read with `dtype=str` so long numbers stay strings.
