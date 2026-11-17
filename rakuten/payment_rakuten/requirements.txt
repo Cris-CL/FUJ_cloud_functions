@@ -1,7 +1,8 @@
-functions-framework==3.*
-pandas==1.5.1
-google-cloud-bigquery==3.4.2
-fsspec==2022.11.0
-gcsfs==2022.11.0
-pandas-gbq==0.29.0
-numpy==1.23.4
+functions-framework==3.10.2
+pandas==3.1.1
+numpy==2.5.5
+google-cloud-bigquery==3.47.0
+google-cloud-storage==3.17.1
+fsspec==2026.9.0
+gcsfs==2026.10.1
+pandas-gbq==0.35.4

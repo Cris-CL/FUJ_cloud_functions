@@ -15,12 +15,13 @@ import os
 import functions_framework
 import pandas as pd
 import numpy as np
+import pandas_gbq
 from google.api_core.exceptions import NotFound
 from google.cloud import bigquery
 
 
 def get_complete_dataframe(uri):
-    complete_df = pd.read_csv(uri, header=3)
+    complete_df = pd.read_csv(uri, header=3, dtype=str)
 
     rep_col = list(complete_df.columns)
     rep_col[-1] = "report_id"
@@ -190,7 +191,7 @@ def read_statement_csv(uri, file_name):
             f"columns.\n  got:      {header}\n  expected: {STATEMENT_HEADER}"
         )
     df = df.rename(columns=STATEMENT_RENAME)
-    df = df.applymap(lambda x: None if x in STATEMENT_EMPTY_VALUES else x)
+    df = df.map(lambda x: None if x in STATEMENT_EMPTY_VALUES else x)
     return df
 
 
@@ -319,7 +320,8 @@ def upload_df(df, df_name):
     }
     table_schema = STATEMENT_SCHEMA if df_name == "statement" else None
     try:
-        df.to_gbq(
+        pandas_gbq.to_gbq(
+            df,
             destination_table=df_destination[df_name],
             if_exists="append",
             progress_bar=False,

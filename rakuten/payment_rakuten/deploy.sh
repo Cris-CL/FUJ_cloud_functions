@@ -5,7 +5,7 @@
 # Check:  gcloud functions describe payment-rakuten --region us-central1 --format=yaml
 #
 # The values below reproduce the live configuration (project test-bigquery-cc,
-# us-central1, python310, GCS finalize trigger on bucket rakuten_payment_raw).
+# us-central1, python314, GCS finalize trigger on bucket rakuten_payment_raw).
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -13,7 +13,7 @@ gcloud functions deploy payment-rakuten \
   --project test-bigquery-cc \
   --gen2 \
   --region us-central1 \
-  --runtime python310 \
+  --runtime python314 \
   --source . \
   --entry-point update_payment \
   --trigger-bucket rakuten_payment_raw \

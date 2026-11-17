@@ -1,6 +1,6 @@
 # payment-rakuten
 
-Cloud Function (Gen 2, python310, project `test-bigquery-cc`, region `us-central1`) that loads the
+Cloud Function (Gen 2, python314, project `test-bigquery-cc`, region `us-central1`) that loads the
 two 楽天ペイ CSV files into BigQuery. It is triggered by every file uploaded to bucket
 `rakuten_payment_raw` and routes on the file name.
 
