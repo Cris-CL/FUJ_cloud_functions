@@ -83,35 +83,40 @@ written here (several are secrets, see [security_notes.md](security_notes.md)).
 
 ## 3. Shopify orders + fulfilments (active)
 
-- **Path:** `shopify_api/get_orders.py` (entry), `orders_process.py`, `orders_parameters.py`, `utils_bq.py`, `utils_df.py`,
-  `fulfillments.py`, `requirements.txt`, `.env`.
+- **Function:** `FUJ_shopify_orders` (Gen 2, python312, us-central1). Deploy: `bash shopify_api/orders/deploy.sh`
+  (reproduces the live configuration; first deployed from the console).
+- **Path:** `shopify_api/orders/`: `main.py` (entry), `orders_process.py`, `orders_parameters.py`, `utils_bq.py`, `utils_df.py`,
+  `fulfillments.py`, `requirements.txt`. The local `.env` stays in `shopify_api/`.
 - **Entry point:** `main(data=None, context=None)`. Background-style signature but returns a Flask `jsonify(...)`, 200.
-- **Trigger:** scheduled (inferred, not in code). HTTP (Cloud Scheduler) vs Pub/Sub is unknown (open question 4).
+- **Trigger:** Pub/Sub topic `shopify_orders` (no retry). Timeout 300 s, 512 MiB.
   `Shopify.orders_master` and `Shopify.fulfillments` were modified 2026-10-16, so it runs at least daily.
-- **Env vars:** `SHOPIFY_KEY`, `SHOPIFY_PASS` (secrets, values redacted), `API_VERSION`, `BUCKET`, `PROJECT_NAME`,
-  `TABLE_NAME`, `FULFILLMENT_TABLE`, `STORE_NAME`.
+- **Env vars:** `SHOPIFY_KEY`, `SHOPIFY_PASS` (Secret Manager `api_key_shop`, `shopy_password`), `API_VERSION`, `BUCKET`,
+  `PROJECT_NAME`, `TABLE_NAME`, `FULFILLMENT_TABLE`, `STORE_NAME`.
   The local `shopify_api/.env` sets `TABLE_NAME` to `Shopify.orders_api_update`, a table that does not exist in BigQuery today;
   production evidently writes `Shopify.orders_master` (open question 3).
 - **External API:** Shopify Admin REST (`orders.json` paged by `since_id`, `orders/{id}/transactions.json` for Stripe / Komoju
   gateway orders, `orders/{id}/fulfillments.json`). Credentials are embedded in the URL (see security_notes.md).
 - **Destination tables:** `Shopify.orders_master` (WRITE_APPEND), `Shopify.fulfillments` (delete + append for the new orders).
-- **Bucket out:** `BUCKET` (= `test-bucket-function-cc`): `SH_problem_data_<date>_<id>_RAW.csv` when the BigQuery upload fails;
+- **Bucket out:** `BUCKET` (= `fujiorg-shopify-orders-raw`): `SH_problem_data_<date>_<id>_RAW.csv` when the BigQuery upload fails;
   on Mondays `SHOPIFY_ORDERS_<date>_<id>_RAW.csv` backup of the deleted 2-week window.
 - **Dedup / refresh:** incremental from the max loaded order (`since_id`). Every Monday (server time, UTC) it first deletes the last
   ~14 days of orders and re-pulls them so pending / unpaid orders get their final status. Recent change (commit `9165893`):
   only `sale` transactions are joined to avoid duplicated reference ids.
-- **Status:** active (latest commits on branch `fix/shopify_orders`).
+- **Status:** active. The deployed source (2026-06-02) predates the repo version: `fulfillments.py` and the transactions
+  fetch in `orders_process.py` gained a retrying HTTP session and fetch-then-normalise (one failing order is skipped), not
+  deployed yet.
 
 ## 4. Shopify payouts (active)
 
-- **Path:** `shopify_api/get_transactions.py` (same folder, `.env` and `requirements.txt` as section 3).
+- **Function:** `FUJ_shopify_payouts` (Gen 2, python312, us-central1). Deploy: `bash shopify_api/payouts/deploy.sh`.
+- **Path:** `shopify_api/payouts/`: `main.py`, `requirements.txt` (own requirements, includes `ShopifyAPI`); identical to the
+  deployed source.
 - **Entry point:** `update_shopify_payout(data=None, context=None)`; returns a JSON string + status.
-- **Trigger:** scheduled (inferred, not in code). Probably a second function deployed from the same source with a different
-  `--entry-point` (open question 4).
-- **Env vars:** `SHOPIFY_KEY`, `SHOPIFY_PASS` (secrets), `API_VERSION`, `BUCKET`, `PROJECT_NAME`, `TABLE_NAME_PAY`, `STORE_NAME`.
+- **Trigger:** Pub/Sub topic `shopify_payouts_weekly` (no retry). Timeout 60 s, 1 GiB.
+- **Env vars:** `SHOPIFY_KEY`, `SHOPIFY_PASS` (Secret Manager `SH_PAY_API_KEY`, `SH_PAY_PASS`, version 1), `API_VERSION`, `BUCKET`, `PROJECT_NAME`, `TABLE_NAME_PAY`, `STORE_NAME`.
   Local `.env` sets `TABLE_NAME_PAY` = `shopify_payouts_api_update` (does not exist in BigQuery); production writes `Shopify.shopify_payouts_api`.
 - **External API:** Shopify Admin `shopify_payments/balance/transactions.json` (since_id paging, limit 250). Uses the `shopify`
-  package (ShopifyAPI), which is missing from `requirements.txt`.
+  package (ShopifyAPI 12.5.0, in `shopify_api/payouts/requirements.txt`).
 - **Destination table:** `Shopify.shopify_payouts_api` (last modified 2026-10-12; table recreated 2025-10-06).
 - **Bucket out:** `SHOPIFY_PAYOUTS_<date>_<id>_RAW.csv` in `BUCKET`.
 - **Dedup / refresh:** deletes from the oldest `pending` / `in_transit` row onward, then appends everything newer, so unsettled
@@ -247,8 +252,8 @@ Taken from the repository inventory (items 2-9), updated with what BigQuery show
    (neither exists in BigQuery), and `amazon/.env` has `DATASET_ID` = `z_test_tables` (which holds small 2024-07-01 copies of
    `order_central_master` / `transaction_view_master`). Confirm the deployed env uses `Shopify.orders_master`,
    `Shopify.shopify_payouts_api` and dataset `Amazon`, and whether the local `.env` files are just test configs.
-3. **Shopify trigger type.** Are `main` (orders) and `update_shopify_payout` (payouts) two functions deployed from the same source,
-   triggered by Cloud Scheduler over HTTP or via Pub/Sub, and at what times? The Monday re-pull uses server time (UTC), so in JST it
+3. **Shopify schedule.** Answered: two functions (`FUJ_shopify_orders`, `FUJ_shopify_payouts`), each with its own folder and
+   `deploy.sh`, triggered via Pub/Sub topics `shopify_orders` / `shopify_payouts_weekly`. Open: at what times are those topics published? The Monday re-pull uses server time (UTC), so in JST it
    happens Monday 09:00 or later; is that intended relative to `FUJ_Shopify` (Mon 11:05 JST)?
 4. **Shopify refunds function.** `shopify_api/refunds` is marked deprecated. Confirm nothing is still deployed or scheduled.
 5. **Stripe flow still scheduled?** `cloud_stripe_report` code dates from 2023-24, but `Shopify.stripe_api` / `stripe_payouts`
