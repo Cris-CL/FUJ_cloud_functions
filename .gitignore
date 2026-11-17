@@ -6,3 +6,15 @@ compose-dev.yaml
 .env
 *.ipynb
 notebooks/
+
+# Local, not versioned
+bigquery_documentation/amazon.md
+bigquery_documentation/generate_lineage.py
+bigquery_documentation/internal/dashboard.md
+bigquery_documentation/internal/legacy.md
+bigquery_documentation/internal/scheduled_queries.md
+bigquery_documentation/internal/security_notes.md
+bigquery_documentation/jan_table_and_sku_master.md
+bigquery_documentation/pipeline_instructions.md
+bigquery_documentation/shopify.md
+inventory/
