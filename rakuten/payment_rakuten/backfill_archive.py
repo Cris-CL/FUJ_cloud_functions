@@ -31,6 +31,13 @@ from main import (
 PROJECT = "test-bigquery-cc"
 SOURCE_BUCKET = "rakuten_payment_raw"
 
+# Files uploaded under a wrong date, archived under the corrected name. Deals settle on
+# the 10th and 25th; this file holds the 2024-09-26..2024-10-10 settlement, loaded into
+# Rakuten.payment_main as report_id 20241010 (its own report_id column says 20241005).
+RENAMES = {
+    "FUJ_202400_Rakuten Deals - 20241005.csv": "FUJ_202400_Rakuten Deals - 20241010.csv",
+}
+
 
 def loaded_state(bq):
     deals = {
@@ -53,6 +60,7 @@ def plan(gcs, bq):
     moves, skipped = [], []
     for blob in gcs.list_blobs(SOURCE_BUCKET):
         name = blob.name
+        archive_name = RENAMES.get(name, name)
         try:
             if is_statement_file(name):
                 report_id = statements.get(name)
@@ -60,10 +68,10 @@ def plan(gcs, bq):
                     raise ArchiveError("not in Rakuten.statement (not loaded)")
             else:
                 report_id = None
-                match = DEALS_NAME.match(name)
+                match = DEALS_NAME.match(archive_name)
                 if match and match["date"] not in deals:
                     raise ArchiveError(f"report_id {match['date']} not in Rakuten.payment_main")
-            destination = archive_object_name(name, report_id)
+            destination = archive_object_name(archive_name, report_id)
             if archive.blob(destination).exists():
                 raise ArchiveError(f"gs://{ARCHIVE_BUCKET}/{destination} already exists")
         except ArchiveError as err:
