@@ -12,12 +12,15 @@ Pinned dependencies: see requirements.txt. Deploy with deploy.sh.
 """
 
 import os
+import re
+from datetime import datetime
+
 import functions_framework
 import pandas as pd
 import numpy as np
 import pandas_gbq
-from google.api_core.exceptions import NotFound
-from google.cloud import bigquery
+from google.api_core.exceptions import NotFound, PreconditionFailed
+from google.cloud import bigquery, storage
 
 
 def get_complete_dataframe(uri):
@@ -303,7 +306,7 @@ def update_statement(uri, file_name):
         f"with report_id {report_id}"
     )
     materialise_cost_rows()
-    return
+    return report_id
 
 
 def upload_df(df, df_name):
@@ -334,18 +337,96 @@ def upload_df(df, df_name):
     return
 
 
-# Triggered by a change in a storage bucket
+# --------------------------------------------------------------------------- #
+# Archive: a file that loaded is moved out of the upload bucket
+# --------------------------------------------------------------------------- #
+
+ARCHIVE_BUCKET = "fujiorg-sales-data"
+ARCHIVE_PREFIX = "Rakuten"
+# "FUJ_202400_Rakuten Deals - 20261010.csv": the FUJ_YYYY00_ prefix is dropped and
+# the year comes from the trailing date (the prefix year can be older than the date).
+DEALS_NAME = re.compile(r"^(?:FUJ_\d{6}_)?(?P<rest>.* - (?P<date>\d{8})\.csv)$")
+
+
+class ArchiveError(ValueError):
+    """The file loaded but could not be archived; it stays in the upload bucket."""
+
+
+def _year(yyyymmdd, file_name):
+    try:
+        return datetime.strptime(yyyymmdd, "%Y%m%d").strftime("%Y")
+    except ValueError:
+        raise ArchiveError(f"{file_name}: '{yyyymmdd}' is not a YYYYMMDD date")
+
+
+def archive_object_name(file_name, report_id=None):
+    """Object name in ARCHIVE_BUCKET for an uploaded file.
+
+    Deals:   Rakuten/<YYYY>/deals/<name without FUJ_YYYY00_>, YYYY from the date in the name.
+    Billpay: Rakuten/<YYYY>/billpay/Billpay_<report_id>.csv, report_id = deposit date.
+    """
+    if is_statement_file(file_name):
+        if not report_id:
+            raise ArchiveError(f"{file_name}: a Billpay file needs its report_id to be archived")
+        year = _year(report_id, file_name)
+        return f"{ARCHIVE_PREFIX}/{year}/billpay/Billpay_{report_id}.csv"
+    match = DEALS_NAME.match(file_name)
+    if not match:
+        raise ArchiveError(
+            f"{file_name}: name has no ' - YYYYMMDD.csv' date; cannot choose the archive folder"
+        )
+    year = _year(match["date"], file_name)
+    return f"{ARCHIVE_PREFIX}/{year}/deals/{match['rest']}"
+
+
+def move_to_archive(client, bucket_name, name, generation, destination_name):
+    """Copy the object to ARCHIVE_BUCKET, then delete the source.
+
+    The copy never overwrites an existing archive object (if_generation_match=0), and the
+    delete only removes the exact generation that was copied. On a failed copy the
+    source is left in place.
+    """
+    source_bucket = client.bucket(bucket_name)
+    source = source_bucket.blob(name, generation=generation)
+    destination = client.bucket(ARCHIVE_BUCKET)
+    try:
+        source_bucket.copy_blob(
+            source,
+            destination,
+            destination_name,
+            source_generation=generation,
+            if_generation_match=0,
+        )
+    except PreconditionFailed:
+        raise ArchiveError(
+            f"{name}: gs://{ARCHIVE_BUCKET}/{destination_name} already exists; "
+            "not overwritten, the file stays in the upload bucket"
+        )
+    source_bucket.delete_blob(name, if_generation_match=generation)
+    print(f"archived gs://{bucket_name}/{name} -> gs://{ARCHIVE_BUCKET}/{destination_name}")
+
+
+def archive(bucket_name, name, generation, report_id=None):
+    move_to_archive(
+        storage.Client(), bucket_name, name, generation, archive_object_name(name, report_id)
+    )
+
+
+# Triggered by a change in a storage bucket. The file is moved to the archive only
+# after it loaded; any failure raises and leaves it in the upload bucket.
 @functions_framework.cloud_event
 def update_payment(cloud_event):
     data = cloud_event.data
     bucket = data["bucket"]
     name = data["name"]
+    generation = int(data["generation"])
     print(name)
 
     uri = f"gs://{bucket}/{name}"
 
     if is_statement_file(name):
-        update_statement(uri, name)
+        report_id = update_statement(uri, name)
+        archive(bucket, name, generation, report_id)
         return
 
     complete_df = get_complete_dataframe(uri)
@@ -369,4 +450,5 @@ def update_payment(cloud_event):
     upload_df(df_main, "main")
     upload_df(df_coupon, "coupon")
     print("End upload process")
+    archive(bucket, name, generation)
     return
