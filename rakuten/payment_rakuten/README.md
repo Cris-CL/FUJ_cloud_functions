@@ -6,6 +6,17 @@ two 楽天ペイ CSV files into BigQuery. It is triggered by every file uploaded
 (`gs://fujiorg-sales-data/Rakuten/`, see "Where files end up"), so **`rakuten_payment_raw` only holds
 files that failed**.
 
+| | |
+|---|---|
+| Status | active |
+| Folder | `rakuten/payment_rakuten/` |
+| Runtime / entry point | python314 / `update_payment` in `main.py` |
+| Trigger | GCS finalize on `rakuten_payment_raw` (trigger location us, runtime and trigger SA `cris-cl@`), no retry |
+| Reads | the uploaded object; `Rakuten.statement` (精算書No dedup); `FUJ_scheduled.rakuten_cost_report()` and `free.rakuten_cost_full` (cost rows) |
+| Writes | `Rakuten.payment_main`, `Rakuten.payment_coupon`, `Rakuten.statement`, `free.rakuten_cost_full` (append); archive in `gs://fujiorg-sales-data/Rakuten/` |
+| Config | env vars `DATASET_ID`, `TABLE_ID_1`, `TABLE_ID_2`, `TABLE_ID_3`, `COST_DATASET_ID`, `COST_TABLE_ID` (values in `deploy.sh`); no secrets |
+| Deploy / check | `make check payment-rakuten`, `make deploy payment-rakuten` (see [Deploy](#deploy)) |
+
 | File you download from 楽天ペイ | Name must | Lands in | Then |
 |---|---|---|---|
 | Payment CSV (deposit detail per order) | anything **not** ending in `_Shop_Billpay.csv`, by convention `FUJ_202400_Rakuten Deals - YYYYMMDD.csv` | `Rakuten.payment_main`, `Rakuten.payment_coupon` | sales chain, unchanged: scheduled query `FUJ_Rakuten_freee` (Saturday) -> `free.rakuten_report_full` |
@@ -97,14 +108,17 @@ The seed (37 rows) is `queries_bq/rakuten_cost/02_rakuten_cost_nomenclature.sql`
 ## Deploy
 
 ```bash
-bash rakuten/payment_rakuten/deploy.sh
-gcloud functions describe payment-rakuten --region us-central1 --format=yaml   # check
+make check payment-rakuten      # config + source vs live, read-only
+make deploy payment-rakuten     # DRY_RUN=1 prints the command only
+make describe payment-rakuten
 ```
 
 `deploy.sh` holds the whole configuration (trigger bucket, service account, memory, timeout, env vars
 `DATASET_ID`, `TABLE_ID_1`, `TABLE_ID_2`, `TABLE_ID_3`, `COST_DATASET_ID`, `COST_TABLE_ID`).
 `requirements.txt` pins the versions the function runs with; change them only together with a test
-deploy. `.gcloudignore` keeps this README and the deploy script out of the uploaded source.
+deploy. `.gcloudignore` keeps this README, the deploy script and the local `backfill_archive.py` out of the
+uploaded source. Until the next deploy, `make check` reports SOURCE DRIFT on `main.py`: the repo only adds a
+docstring paragraph about the archive (no code change).
 
 ## BigQuery objects (creation scripts in `queries_bq/rakuten_cost/`)
 
