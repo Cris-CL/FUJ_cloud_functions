@@ -15,20 +15,24 @@ def payout_request():
     ## end_time is at 23:59:59 hrs 1 day before the execution of the funciton
     reportes_stripe = stripe.reporting.ReportRun.list(limit=10)
     max_timestamp = 0
-
+    
     for rep in reportes_stripe["data"]:
         if rep["report_type"] == report_var:
             max_timestamp = max(max_timestamp,rep["parameters"]["interval_end"])
-
+    
     start_var = max_timestamp + 1
 
     today = datetime.combine(date.today(), time())
     end_time = today - timedelta(days=1,hours=0,seconds=1) ## today date minus 1 day and 1 second --> At 23:59:59 2 days ago from execution time
     end_var = str(int(end_time.timestamp()))
 
+    if int(start_var) > int(end_var):
+        print("End time is before start time, aborting request")
+        return
+
     ## Type of report to create
     ## ref: https://stripe.com/docs/reports/report-types
-
+    
 
     report_dict = stripe.reporting.ReportRun.create(
     report_type = report_var,
