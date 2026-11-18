@@ -81,6 +81,8 @@ def get_dataframe(uri):
 
 def prepare_dataframe(df, df_type, file_name):
     df.columns = df.columns.map(lambda x: x.lower().strip().replace("-", "_"))
+    
+    df = df[data_types[df_type].keys()] #### Only use columns that are in the dictionary
 
     df = df.astype(data_types[df_type])
 
