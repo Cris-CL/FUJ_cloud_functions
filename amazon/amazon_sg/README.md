@@ -7,7 +7,7 @@ bucket. Same idea as [upload-amazon](../upload_amazon/README.md), with SG-specif
 |---|---|
 | Status | legacy, still deployed. Amazon Singapore is inactive; `Amazon.tv_sg` / `Amazon.oc_sg` last modified 2025-05-08 |
 | Folder | `amazon/amazon_sg/` |
-| Runtime / entry point | python310 (deprecated runtime) / `amazon_sg_process` in `main.py` |
+| Runtime / entry point | python312 / `amazon_sg_process` in `main.py` |
 | Trigger | GCS finalize on `amazon_sg` (trigger location us-central1), no retry |
 | Reads | the uploaded object; `SELECT DISTINCT FILE_NAME` from the destination table |
 | Writes | `Amazon.oc_sg` or `Amazon.tv_sg` (WRITE_APPEND); archive in `gs://fujiorg-sales-data/Amazon_SG/` |
@@ -51,6 +51,10 @@ The live CPU (167m) is not the Gen 2 default for 512Mi, so `deploy.sh` passes `-
 
 - `make check` reports one expected residual: the deployed zip also contains `old_main.py`, which nothing imports.
   It is not in the repo; the next deploy from here drops it.
-- `python310` is deprecated; a redeploy may be refused or warned (see upload-amazon for the dependency note).
+- Upgraded from python310 (deprecated) to python312 on 2026-11-18 (pandas 1.5.1 -> 2.2.2, numpy 1.26.4, pyarrow 15.0.2).
+  Checked by running all 200 archived SG files in `gs://fujiorg-sales-data/Amazon_SG/` through the parsing and the
+  BigQuery Arrow conversion on both stacks: identical except an empty `ship_state` that pandas 1.5 stored as the text
+  `"None"` and pandas 2 stores as NULL (one file). pandas 2 names the +09:00 timestamp dtype `UTC+09:00`, so
+  `config_asg.dtypes_dict` gained that key (without it, every Order Central file failed with a KeyError).
 - Open question: Amazon SG is inactive. Should the function be deleted, or kept for possible reuse?
 - The file is moved before the BigQuery load, so a failed load leaves the file archived but not loaded.

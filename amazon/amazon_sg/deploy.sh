@@ -5,7 +5,7 @@
 # Check:  make check amazon_sg
 #
 # The values below reproduce the live configuration (project test-bigquery-cc, us-central1,
-# python310, GCS finalize trigger on bucket amazon_sg, no retry). The live CPU (167m) is not the
+# python312, GCS finalize trigger on bucket amazon_sg, no retry). The live CPU (167m) is not the
 # Gen 2 default for 512Mi, so --cpu is passed explicitly.
 set -euo pipefail
 FUNCTION=amazon_sg
@@ -17,7 +17,7 @@ ${GCLOUD:-gcloud} functions deploy "$FUNCTION" \
   --project "$PROJECT" \
   --gen2 \
   --region "$REGION" \
-  --runtime python310 \
+  --runtime python312 \
   --source . \
   --entry-point amazon_sg_process \
   --trigger-bucket amazon_sg \
