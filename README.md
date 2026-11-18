@@ -49,10 +49,8 @@ There is no "deploy all". Rules:
 
 All functions: project `test-bigquery-cc`, region `us-central1`, Gen 2.
 
-`python310` is deprecated by Google Cloud: a redeploy of the functions still on it may be refused or warned; they are being
-upgraded to python312 one at a time. Upgrading is a
-separate change per function (their pins `pandas==1.5.1`, `numpy==1.23.4`, `pyarrow==9.0.0` have no wheels for
-Python 3.12+).
+All functions run on a supported runtime: the six former `python310` functions were upgraded to python312 on
+2026-11-18 (pinned dependencies, pandas 2.2; see each README for what changed and how it was checked).
 
 ## Repo layout
 
