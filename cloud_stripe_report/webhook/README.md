@@ -8,7 +8,7 @@ HTTP endpoint that Stripe calls when a report run finishes. It downloads the rep
 |---|---|
 | Status | active (`Shopify.stripe_api` / `Shopify.stripe_payouts` last modified 2026-10-11) |
 | Folder | `cloud_stripe_report/webhook/` |
-| Runtime / entry point | python310 (deprecated runtime) / `webhook` in `main.py` (HTTP) |
+| Runtime / entry point | python312 / `webhook` in `main.py` (HTTP) |
 | Trigger | HTTP, public (`allUsers` has `roles/run.invoker`); URL `https://us-central1-test-bigquery-cc.cloudfunctions.net/stripe-webhook` |
 | Reads | Stripe webhook events; the report file at `result.url` (Stripe API, basic auth with the API key) |
 | Writes | `gs://fujiorg-stripe-raw/PAY_<file>` and `gs://fujiorg-stripe-raw/BAL_<file>` |
@@ -48,11 +48,12 @@ make describe stripe-webhook
 
 ## Known issues / open questions
 
-- `python310` is deprecated; a redeploy may be refused or warned.
+- Upgraded from python310 (deprecated) to python312 on 2026-11-18 (Flask 2.2 -> 3.1, google-cloud-storage 1.44 -> 3.17,
+  stripe pinned to 16.1.0), tested offline with signed test events on both the old and the new stack.
 - The report is processed in a thread after the HTTP response is sent. On Cloud Functions Gen 2 / Cloud Run, CPU may
   be throttled after the response, so the upload can be slow or lost; a failure there is only visible in the logs
   (Stripe has already received 200 and does not retry).
-- `process_report.py` imports `requests`, which is not listed in `requirements.txt` (it is installed as a dependency of
-  `stripe`).
+- `requirements.txt` now lists `requests` (imported by `process_report.py`, previously only installed via `stripe`) and
+  no longer lists `pytz` and `google-cloud-bigquery`, which nothing imports.
 - The older unused payout request code `payout_wh.py` was moved to `old_functions/` on 2026-11-18 (it was never in the
   deployed source).

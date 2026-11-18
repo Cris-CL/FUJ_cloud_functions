@@ -5,7 +5,7 @@
 # Check:  make check stripe-webhook
 #
 # The values below reproduce the live configuration (project test-bigquery-cc, us-central1,
-# python310, HTTP trigger open to allUsers; the code verifies the Stripe signature). Its URL
+# python312, HTTP trigger open to allUsers; the code verifies the Stripe signature). Its URL
 # https://us-central1-test-bigquery-cc.cloudfunctions.net/stripe-webhook is registered in Stripe:
 # do not rename the function. Stripe key and webhook secret come from Secret Manager (version 1).
 set -euo pipefail
@@ -18,7 +18,7 @@ ${GCLOUD:-gcloud} functions deploy "$FUNCTION" \
   --project "$PROJECT" \
   --gen2 \
   --region "$REGION" \
-  --runtime python310 \
+  --runtime python312 \
   --source . \
   --entry-point webhook \
   --trigger-http \
