@@ -1,8 +1,9 @@
 .gcloudignore
 .git
 .gitignore
+.env
+*.ipynb
 __pycache__/
 *.pyc
-.env
 README.md
 deploy.sh

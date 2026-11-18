@@ -1,19 +1,22 @@
 #!/usr/bin/env bash
 # Deploys the FUJ_shopify_payouts Cloud Function (Gen 2) from this folder.
 #
-# Usage:  bash shopify_api/payouts/deploy.sh
-# Check:  gcloud functions describe FUJ_shopify_payouts --region us-central1 --format=yaml
+# Usage:  make deploy FUJ_shopify_payouts      (or: bash shopify_api/payouts/deploy.sh)
+# Check:  make check FUJ_shopify_payouts
 #
 # The values below reproduce the live configuration (project test-bigquery-cc, us-central1,
 # python312, Pub/Sub trigger on topic shopify_payouts_weekly, no retry). It was first deployed
 # from the console; SHOPIFY_KEY / SHOPIFY_PASS come from Secret Manager (pinned to version 1).
 set -euo pipefail
+FUNCTION=FUJ_shopify_payouts
+REGION=us-central1
+PROJECT=test-bigquery-cc
 cd "$(dirname "$0")"
 
-gcloud functions deploy FUJ_shopify_payouts \
-  --project test-bigquery-cc \
+${GCLOUD:-gcloud} functions deploy "$FUNCTION" \
+  --project "$PROJECT" \
   --gen2 \
-  --region us-central1 \
+  --region "$REGION" \
   --runtime python312 \
   --source . \
   --entry-point update_shopify_payout \
