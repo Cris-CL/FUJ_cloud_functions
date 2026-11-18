@@ -5,7 +5,7 @@
 # Check:  make check upload-amazon
 #
 # The values below reproduce the live configuration (project test-bigquery-cc, us-central1,
-# python310, GCS finalize trigger on bucket amazon-raw, no retry). It was last edited in the
+# python312, GCS finalize trigger on bucket amazon-raw, no retry). It was last edited in the
 # console; deploy from here only.
 set -euo pipefail
 FUNCTION=upload-amazon
@@ -17,7 +17,7 @@ ${GCLOUD:-gcloud} functions deploy "$FUNCTION" \
   --project "$PROJECT" \
   --gen2 \
   --region "$REGION" \
-  --runtime python310 \
+  --runtime python312 \
   --source . \
   --entry-point amazon_process \
   --trigger-bucket amazon-raw \

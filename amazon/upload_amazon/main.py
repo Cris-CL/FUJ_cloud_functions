@@ -84,6 +84,12 @@ def prepare_dataframe(df, df_type, file_name):
     
     df = df[data_types[df_type].keys()] #### Only use columns that are in the dictionary
 
+    # Dates carry an offset (e.g. +09:00). pandas 1.x converted them to naive UTC in astype; pandas 2.x refuses that,
+    # so convert to UTC and drop the offset explicitly (same result).
+    for col, dtype in data_types[df_type].items():
+        if dtype.startswith("datetime64"):
+            df[col] = pd.to_datetime(df[col], utc=True).dt.tz_localize(None)
+
     df = df.astype(data_types[df_type])
 
     for col in df.columns:
@@ -112,6 +118,7 @@ def upload_bq(df, df_type, rep_classifier):
             "int64": "INTEGER",
             "float64": "FLOAT",
             "datetime64[ns]": "DATETIME",
+            "datetime64[us]": "DATETIME",  # pandas 2.x dtype of UPLOADED_DATETIME (set from datetime.now())
         }
         disposition = "WRITE_APPEND"
 

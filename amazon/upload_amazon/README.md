@@ -7,7 +7,7 @@ Loads Amazon Japan Seller Central reports (Order Central and settlement / Transa
 |---|---|
 | Status | active (`Amazon.order_central_master` / `Amazon.transaction_view_master` last modified 2026-10-13) |
 | Folder | `amazon/upload_amazon/` |
-| Runtime / entry point | python310 (deprecated runtime) / `amazon_process` in `main.py` |
+| Runtime / entry point | python312 / `amazon_process` in `main.py` |
 | Trigger | GCS finalize on `amazon-raw` (trigger location us-central1), no retry |
 | Reads | the uploaded object; `SELECT DISTINCT FILE_NAME` from the destination table |
 | Writes | `Amazon.order_central_master` or `Amazon.transaction_view_master` (WRITE_APPEND); archive in `gs://fujiorg-sales-data/Amazon/` |
@@ -54,8 +54,13 @@ make describe upload-amazon
 
 ## Known issues / open questions
 
-- `python310` is deprecated; a redeploy may be refused or warned. Upgrading means new dependency pins
-  (`pandas==1.5.1`, `numpy==1.23.4` have no wheels for Python 3.12+) and testing.
+- Upgraded from python310 (deprecated) to python312 on 2026-11-18 (pandas 1.5.1 -> 2.2.2, numpy 1.26.4, pyarrow 15.0.2).
+  Three pandas 2 changes needed code changes: the bare `datetime64` dtypes in `dict_utils_ama.py` now say
+  `datetime64[ns]`; the offset dates (`+09:00`) are converted to naive UTC explicitly before `astype` (pandas 1 did it
+  implicitly); `UPLOADED_DATETIME` from `datetime.now()` is `datetime64[us]` and is mapped to DATETIME. Checked on all
+  323 archived 2025-2026 reports (2,408,130 rows): the BigQuery upload data is identical to the old stack's except 34
+  rows whose empty `ship_state` pandas 1.5 stored as the text `"None"` and pandas 2 stores as NULL (the table already has
+  ~800 NULL and 7 `"None"` values; no query reads `ship_state`).
 - The file is moved to the archive **before** the BigQuery load; if the load fails, the file is archived but not loaded
   and has to be re-uploaded by hand.
 - The repo was synced on 2026-11-18 with the deployed source (column filter on `data_types` keys, previously only in

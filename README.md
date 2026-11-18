@@ -37,7 +37,7 @@ There is no "deploy all". Rules:
 
 | Function | Folder | Trigger | Writes to | Status | Runtime |
 |---|---|---|---|---|---|
-| [upload-amazon](amazon/upload_amazon/README.md) | `amazon/upload_amazon/` | GCS `amazon-raw` | `Amazon.order_central_master`, `Amazon.transaction_view_master` | active | python310 (deprecated) |
+| [upload-amazon](amazon/upload_amazon/README.md) | `amazon/upload_amazon/` | GCS `amazon-raw` | `Amazon.order_central_master`, `Amazon.transaction_view_master` | active | python312 |
 | [amazon_sg](amazon/amazon_sg/README.md) | `amazon/amazon_sg/` | GCS `amazon_sg` | `Amazon.oc_sg`, `Amazon.tv_sg` | legacy (still deployed) | python312 |
 | [FUJ_shopify_orders](shopify_api/orders/README.md) | `shopify_api/orders/` | Pub/Sub `shopify_orders` (daily 10:00 Asia/Tokyo) | `Shopify.orders_master`, `Shopify.fulfillments` | active | python312 |
 | [FUJ_shopify_payouts](shopify_api/payouts/README.md) | `shopify_api/payouts/` | Pub/Sub `shopify_payouts_weekly` (Mon 11:00 Asia/Tokyo) | `Shopify.shopify_payouts_api` | active | python312 |
