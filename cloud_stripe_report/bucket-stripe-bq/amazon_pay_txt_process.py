@@ -60,6 +60,11 @@ def clean_txt(file):
     new_pay["FILE_NAME"] = file_name
     new_pay["UPDATED_AT"] = datetime.now()
 
+    # The dates carry an offset ("2024-12-11T00:10:52 +0900"). pandas 1.x converted them to naive UTC in astype;
+    # pandas 2.x refuses that, so convert to UTC and drop the offset explicitly (same result).
+    for date_col in ["transactionposteddate", "settlement_end_date"]:
+        new_pay[date_col] = pd.to_datetime(new_pay[date_col], utc=True).dt.tz_localize(None)
+
     new_pay = new_pay.astype({
         "transactionposteddate":"datetime64[ns]",
 

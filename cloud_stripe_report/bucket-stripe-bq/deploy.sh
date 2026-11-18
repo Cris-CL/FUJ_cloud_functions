@@ -5,7 +5,7 @@
 # Check:  make check bucket-stripe-bq
 #
 # The values below reproduce the live configuration (project test-bigquery-cc, us-central1,
-# python310, GCS finalize trigger on bucket fujiorg-stripe-raw in location us, no retry).
+# python312, GCS finalize trigger on bucket fujiorg-stripe-raw in location us, no retry).
 set -euo pipefail
 FUNCTION=bucket-stripe-bq
 REGION=us-central1
@@ -16,7 +16,7 @@ ${GCLOUD:-gcloud} functions deploy "$FUNCTION" \
   --project "$PROJECT" \
   --gen2 \
   --region "$REGION" \
-  --runtime python310 \
+  --runtime python312 \
   --source . \
   --entry-point upload_stripe_bq \
   --trigger-bucket fujiorg-stripe-raw \

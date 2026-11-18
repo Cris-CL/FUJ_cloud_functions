@@ -8,7 +8,7 @@ Loads Stripe report CSVs (balance change and payout reconciliation) and Amazon P
 |---|---|
 | Status | active (`Shopify.stripe_api` / `Shopify.stripe_payouts` last modified 2026-10-11; `Shopify.amazon_pay` last modified 2025-01-10) |
 | Folder | `cloud_stripe_report/bucket-stripe-bq/` |
-| Runtime / entry point | python310 (deprecated runtime) / `upload_stripe_bq` in `main.py` |
+| Runtime / entry point | python312 / `upload_stripe_bq` in `main.py` |
 | Trigger | GCS finalize on `fujiorg-stripe-raw` (trigger location us, trigger SA `cris-cl@`), no retry |
 | Reads | the uploaded object |
 | Writes | `Shopify.stripe_api`, `Shopify.stripe_payouts`, `Shopify.amazon_pay` (all WRITE_APPEND); Amazon Pay files also to `gs://fujiorg-sales-data/Shopify/amazon_pay/` |
@@ -50,5 +50,8 @@ make describe bucket-stripe-bq
 
 ## Known issues / open questions
 
-- `python310` is deprecated; a redeploy may be refused or warned.
+- Upgraded from python310 (deprecated) to python312 on 2026-11-18 (pandas 1.5.1 -> 2.2.2, numpy 1.26.4, pyarrow 15.0.2).
+  pandas 2 no longer converts the offset dates of Amazon Pay files (`2024-12-11T00:10:52 +0900`) to naive UTC inside
+  `astype`, so `clean_txt` now does it explicitly. Checked on all 127 raw files in
+  `gs://fujiorg-sales-data/Shopify/amazon_pay/RAW/`: the BigQuery upload data is identical to the old stack's.
 - Is Amazon Pay still used? `Shopify.amazon_pay` has not changed since 2025-01-10.
