@@ -49,8 +49,7 @@ The live CPU (167m) is not the Gen 2 default for 512Mi, so `deploy.sh` passes `-
 
 ## Known issues / open questions
 
-- `make check` reports one expected residual: the deployed zip also contains `old_main.py`, which nothing imports.
-  It is not in the repo; the next deploy from here drops it.
+- The unused `old_main.py` that was only in the deployed zip was dropped by the 2026-11-18 deploy from the repo.
 - Upgraded from python310 (deprecated) to python312 on 2026-11-18 (pandas 1.5.1 -> 2.2.2, numpy 1.26.4, pyarrow 15.0.2).
   Checked by running all 200 archived SG files in `gs://fujiorg-sales-data/Amazon_SG/` through the parsing and the
   BigQuery Arrow conversion on both stacks: identical except an empty `ship_state` that pandas 1.5 stored as the text
