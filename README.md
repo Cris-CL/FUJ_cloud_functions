@@ -44,7 +44,7 @@ There is no "deploy all". Rules:
 | [stripe-requests-reps](cloud_stripe_report/create_report_stripe/README.md) | `cloud_stripe_report/create_report_stripe/` | Pub/Sub `weekly_stripe_report` (Mon 08:00 Asia/Tokyo) | Stripe report runs | active | python312 |
 | [stripe-webhook](cloud_stripe_report/webhook/README.md) | `cloud_stripe_report/webhook/` | HTTP (Stripe webhook, public) | `gs://fujiorg-stripe-raw` | active | python312 |
 | [bucket-stripe-bq](cloud_stripe_report/bucket-stripe-bq/README.md) | `cloud_stripe_report/bucket-stripe-bq/` | GCS `fujiorg-stripe-raw` | `Shopify.stripe_api`, `Shopify.stripe_payouts`, `Shopify.amazon_pay` | active | python312 |
-| [rakuten-update](rakuten/upload_rakuten/README.md) | `rakuten/upload_rakuten/` | GCS `rakuten_orders_raw` | `Rakuten.orders` | active | python310 (deprecated) |
+| [rakuten-update](rakuten/upload_rakuten/README.md) | `rakuten/upload_rakuten/` | GCS `rakuten_orders_raw` | `Rakuten.orders` | active | python312 |
 | [payment-rakuten](rakuten/payment_rakuten/README.md) | `rakuten/payment_rakuten/` | GCS `rakuten_payment_raw` | `Rakuten.payment_main`, `Rakuten.payment_coupon`, `Rakuten.statement`, `free.rakuten_cost_full` | active | python314 |
 
 All functions: project `test-bigquery-cc`, region `us-central1`, Gen 2.

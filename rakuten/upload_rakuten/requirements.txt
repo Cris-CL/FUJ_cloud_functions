@@ -1,7 +1,7 @@
-functions-framework==3.*
-google-cloud-bigquery>=3.3.5
-fsspec>=2022.11.0
-gcsfs>=2022.11.0
-pyarrow==9.0.0
-pandas==1.5.1
-numpy==1.23.4
+functions-framework==3.10.2
+google-cloud-bigquery==3.25.0
+fsspec==2024.6.1
+gcsfs==2024.6.1
+pyarrow==15.0.2
+pandas==2.2.2
+numpy==1.26.4

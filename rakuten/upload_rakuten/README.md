@@ -6,7 +6,7 @@ Loads Rakuten RMS order CSV exports dropped into `rakuten_orders_raw` into `Raku
 |---|---|
 | Status | active (`Rakuten.orders` last modified 2026-10-06, recreated 2025-04-11) |
 | Folder | `rakuten/upload_rakuten/` |
-| Runtime / entry point | python310 (deprecated runtime) / `upload_rakuten_bq` in `main.py` |
+| Runtime / entry point | python312 / `upload_rakuten_bq` in `main.py` |
 | Trigger | GCS finalize on `rakuten_orders_raw` (trigger location us, trigger SA `cris-cl@`), no retry |
 | Reads | the uploaded object; the schema of the destination table |
 | Writes | `Rakuten.orders` (WRITE_APPEND). The uploaded file is not moved or archived |
@@ -42,7 +42,11 @@ make describe rakuten-update
 
 ## Known issues / open questions
 
-- `python310` is deprecated; a redeploy may be refused or warned.
+- Upgraded from python310 (deprecated) to python312 on 2026-11-18 (pandas 1.5.1 -> 2.2.2, numpy 1.26.4, pyarrow 15.0.2), no
+  code change. Checked on all 174 files in `gs://rakuten_orders_raw` (117,890 rows): the BigQuery upload data is identical
+  to the old stack's.
+- `order_time` (注文時間, a time of day) is cast to a datetime, so it is stored with the upload date, e.g.
+  `2026-11-18 00:35:28`; only its time part is meaningful.
 - The repo was synced on 2026-11-18 with the deployed source (missing translated columns are added as empty, previously
   only in the console-edited version).
 - `UPDATED_AT_UTC` is `datetime.now()` in server time, which is UTC on Cloud Functions.

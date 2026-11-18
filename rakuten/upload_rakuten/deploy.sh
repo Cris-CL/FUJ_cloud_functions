@@ -5,7 +5,7 @@
 # Check:  make check rakuten-update
 #
 # The values below reproduce the live configuration (project test-bigquery-cc, us-central1,
-# python310, GCS finalize trigger on bucket rakuten_orders_raw in location us, no retry).
+# python312, GCS finalize trigger on bucket rakuten_orders_raw in location us, no retry).
 # The live CPU (0.1666) is not the Gen 2 default for 512Mi, so --cpu is passed explicitly.
 # The local notebook orders_process.ipynb is excluded by .gcloudignore.
 set -euo pipefail
@@ -18,7 +18,7 @@ ${GCLOUD:-gcloud} functions deploy "$FUNCTION" \
   --project "$PROJECT" \
   --gen2 \
   --region "$REGION" \
-  --runtime python310 \
+  --runtime python312 \
   --source . \
   --entry-point upload_rakuten_bq \
   --trigger-bucket rakuten_orders_raw \
