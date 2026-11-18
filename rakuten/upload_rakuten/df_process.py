@@ -21,6 +21,12 @@ def load_rak_orders_df(uri,file_name):
     except:
         df = pd.read_csv(uri)
    ######## columns verification
+
+    for elem in columns_names_translation.keys():
+        if elem not in df.columns:
+            df[elem] = None
+            df = df.copy()
+            
     df.columns = [columns_names_translation.get(col) for col in df.columns] ### rename columns based on the dictionary
     df = df[columns_names_translation.values()] #### Only use columns that are in the dictionary
 
