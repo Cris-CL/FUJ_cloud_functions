@@ -41,7 +41,7 @@ There is no "deploy all". Rules:
 | [amazon_sg](amazon/amazon_sg/README.md) | `amazon/amazon_sg/` | GCS `amazon_sg` | `Amazon.oc_sg`, `Amazon.tv_sg` | legacy (still deployed) | python310 (deprecated) |
 | [FUJ_shopify_orders](shopify_api/orders/README.md) | `shopify_api/orders/` | Pub/Sub `shopify_orders` (daily 10:00 Asia/Tokyo) | `Shopify.orders_master`, `Shopify.fulfillments` | active | python312 |
 | [FUJ_shopify_payouts](shopify_api/payouts/README.md) | `shopify_api/payouts/` | Pub/Sub `shopify_payouts_weekly` (Mon 11:00 Asia/Tokyo) | `Shopify.shopify_payouts_api` | active | python312 |
-| [stripe-requests-reps](cloud_stripe_report/create_report_stripe/README.md) | `cloud_stripe_report/create_report_stripe/` | Pub/Sub `weekly_stripe_report` (Mon 08:00 Asia/Tokyo) | Stripe report runs | active | python310 (deprecated) |
+| [stripe-requests-reps](cloud_stripe_report/create_report_stripe/README.md) | `cloud_stripe_report/create_report_stripe/` | Pub/Sub `weekly_stripe_report` (Mon 08:00 Asia/Tokyo) | Stripe report runs | active | python312 |
 | [stripe-webhook](cloud_stripe_report/webhook/README.md) | `cloud_stripe_report/webhook/` | HTTP (Stripe webhook, public) | `gs://fujiorg-stripe-raw` | active | python310 (deprecated) |
 | [bucket-stripe-bq](cloud_stripe_report/bucket-stripe-bq/README.md) | `cloud_stripe_report/bucket-stripe-bq/` | GCS `fujiorg-stripe-raw` | `Shopify.stripe_api`, `Shopify.stripe_payouts`, `Shopify.amazon_pay` | active | python310 (deprecated) |
 | [rakuten-update](rakuten/upload_rakuten/README.md) | `rakuten/upload_rakuten/` | GCS `rakuten_orders_raw` | `Rakuten.orders` | active | python310 (deprecated) |
@@ -49,7 +49,8 @@ There is no "deploy all". Rules:
 
 All functions: project `test-bigquery-cc`, region `us-central1`, Gen 2.
 
-`python310` is deprecated by Google Cloud: a redeploy of those six functions may be refused or warned. Upgrading is a
+`python310` is deprecated by Google Cloud: a redeploy of the functions still on it may be refused or warned; they are being
+upgraded to python312 one at a time. Upgrading is a
 separate change per function (their pins `pandas==1.5.1`, `numpy==1.23.4`, `pyarrow==9.0.0` have no wheels for
 Python 3.12+).
 

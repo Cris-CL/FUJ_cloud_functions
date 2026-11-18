@@ -1,2 +1,2 @@
-google-cloud-bigquery>=3.3.5
-stripe>=4.2.0
+google-cloud-bigquery==3.47.0
+stripe==16.1.0

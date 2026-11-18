@@ -8,7 +8,7 @@ report it calls [stripe-webhook](../webhook/README.md), which stores the CSV, an
 |---|---|
 | Status | active (`Shopify.stripe_api` / `Shopify.stripe_payouts` last modified 2026-10-11) |
 | Folder | `cloud_stripe_report/create_report_stripe/` |
-| Runtime / entry point | python310 (deprecated runtime) / `request_reports` in `main.py` (background function `(data, context)`) |
+| Runtime / entry point | python312 / `request_reports` in `main.py` (background function `(data, context)`) |
 | Trigger | Pub/Sub `weekly_stripe_report`, published by Cloud Scheduler `stripe_weekly_report` (`0 8 * * 1` Asia/Tokyo, Mondays 08:00), no retry |
 | Reads | `MAX(created_utc)` from `TABLE_QUERY` (`Shopify.stripe_api`); the last 10 Stripe report runs |
 | Writes | Stripe report runs (no BigQuery or GCS writes) |
@@ -32,6 +32,9 @@ report run, so a rerun the same day requests (almost) nothing new. If the payout
 
 ## Configuration
 
+Dependencies are pinned (`google-cloud-bigquery==3.47.0`, `stripe==16.1.0`); before 2026-11 they were unpinned
+(`>=3.3.5`, `>=4.2.0`) and resolved at build time.
+
 Env vars (values in `deploy.sh`): `TABLE_QUERY` (table read for the last loaded balance row), `TABLE_QUERY_PAY`
 (set live but not read by the code). Secret: `stripe_key` = Secret Manager `stripe` version 1.
 
@@ -45,6 +48,6 @@ make describe stripe-requests-reps
 
 ## Known issues / open questions
 
-- `python310` is deprecated; a redeploy may be refused or warned.
+- Upgraded from python310 (deprecated) to python312 on 2026-11-18, tested offline with mocked BigQuery and Stripe.
 - The repo was synced on 2026-11-18 with the deployed source: the start > end guard in `payouts.py` was only in the
   deployed version; the repo's comment-only query label (`---- stripe_weekly query ----`) was dropped to match production.

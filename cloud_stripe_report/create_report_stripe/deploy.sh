@@ -5,7 +5,7 @@
 # Check:  make check stripe-requests-reps
 #
 # The values below reproduce the live configuration (project test-bigquery-cc, us-central1,
-# python310, Pub/Sub trigger on topic weekly_stripe_report, no retry). The Stripe key comes from
+# python312, Pub/Sub trigger on topic weekly_stripe_report, no retry). The Stripe key comes from
 # Secret Manager (secret "stripe", version 1).
 set -euo pipefail
 FUNCTION=stripe-requests-reps
@@ -17,7 +17,7 @@ ${GCLOUD:-gcloud} functions deploy "$FUNCTION" \
   --project "$PROJECT" \
   --gen2 \
   --region "$REGION" \
-  --runtime python310 \
+  --runtime python312 \
   --source . \
   --entry-point request_reports \
   --trigger-topic weekly_stripe_report \
