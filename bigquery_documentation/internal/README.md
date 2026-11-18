@@ -9,7 +9,7 @@ This folder is the owner's private operations notebook for the Fuji Organics sal
 - It is **not shared**. The documentation shared with the coworker (GCP project owner) and his agent is the
   parent folder `bigquery_documentation/`, which must stay self-contained and must never link here.
 - Unlike the shared docs, these pages may reference repository paths (relative to the `cloud_functions`
-  repo root, e.g. `amazon/amazon_process.py`; the sibling Komoju project is written as `../komoju/...`),
+  repo root, e.g. `amazon/upload_amazon/main.py`; the sibling Komoju project is written as `../komoju/...`),
   bucket names, dataset names and the dashboard chain.
 - No secret values appear anywhere in this folder. Variables and files are named, values are redacted.
 
@@ -57,8 +57,8 @@ Details and failure checks: [scheduled_queries.md](scheduled_queries.md).
 
 | When | Task | Notes |
 |---|---|---|
-| Weekly (per order-report week) | Download the Amazon Order Central (order) report from Seller Central, name it `YYYYMM_W<n>.txt` (e.g. `202605_W3.txt`), upload to the Amazon landing bucket. | `amazon/amazon_process.py` loads it into `Amazon.order_central_master` and moves it to `gs://fujiorg-sales-data/Amazon/order_central/sales_<year>/OC_<name>`. |
-| Each Amazon settlement | Download the settlement (transaction view) report, name it `YYYYMMDD.txt` (e.g. `20240627.txt`), upload to the landing bucket. | Loaded into `Amazon.transaction_view_master`; archived to `.../Amazon/transaction_view/settlement_<year>/TV_<name>`. Next day 09:12 JST `FUJ_Amazon_freee` appends the settlement to `free.amazon_report_full`. |
+| Weekly (per order-report week) | Download the Amazon Order Central (order) report from Seller Central, name it `YYYYMM_W<n>.txt` (e.g. `202605_W3.txt`), upload to bucket `amazon-raw`. | Cloud Function `upload-amazon` (`amazon/upload_amazon/main.py`) loads it into `Amazon.order_central_master` and moves it to `gs://fujiorg-sales-data/Amazon/order_central/sales_<year>/OC_<name>`. |
+| Each Amazon settlement | Download the settlement (transaction view) report, name it `YYYYMMDD.txt` (e.g. `20240627.txt`), upload to bucket `amazon-raw`. | Loaded into `Amazon.transaction_view_master`; archived to `.../Amazon/transaction_view/settlement_<year>/TV_<name>`. Next day 09:12 JST `FUJ_Amazon_freee` appends the settlement to `free.amazon_report_full`. |
 | After each Amazon settlement | Check for `MISSING NOMENCLATURE ...` in the account column (sheet AMA_L / `free.amazon_report_full`). Add the new fee type to `Amazon.nomenclature` by hand. | The settlement is skipped once it is in `free.amazon_report_full` (`settlement_id NOT IN` filter in `FUJ_extra.AMA_SUB`), so a settlement appended with missing nomenclature has to be removed from `free.amazon_report_full` before it is rebuilt. |
 | Monthly | Rakuten RMS order CSV export -> upload (orders loader) -> `Rakuten.orders`. | Which loader path is live is an open question (see cloud_functions.md). |
 | Monthly / per billpay | Rakuten billpay (楽天ペイ精算書) payment CSV -> `Rakuten.payment_main` + `Rakuten.payment_coupon` (cloud function `update_payment` or `rakuten/update.ipynb` from local files). | Then Saturday 09:00 JST `FUJ_Rakuten_freee` appends to `free.rakuten_report_full`. |
@@ -81,10 +81,10 @@ Details and failure checks: [scheduled_queries.md](scheduled_queries.md).
    copying the deposit's rows into the monthly tab and 決済日. Amounts are whole yen, taxes allocated to the
    statement's 消費税 line (rakuten.md section 4).
 3. **Idempotency for re-uploaded Amazon files.** Note: the owner's working assumption is that the
-   "already on the table" branch in `amazon/amazon_process.py` is commented out. In the repository version
-   (last change `b7dff95` "latest deployed", 2025-01-21; unchanged at HEAD) the branch is **active**: a file whose
+   "already on the table" branch in the Amazon loader (`amazon/upload_amazon/main.py`, function `upload-amazon`) is
+   commented out. In the repository version, which equals the deployed source since 2026-11-18, the branch is **active**: a file whose
    exact name is already in `FILE_NAME` is not loaded and is moved to `gs://fujiorg-sales-data/Amazon/repeated_files/`.
    What is missing is the `## TODO` inside that branch (delete the old rows and load the new file). Gaps:
    a re-export under a different file name is loaded again (duplicates); if the `FILE_NAME` lookup query fails
-   the code falls back to an empty list and loads the file anyway; and the deployed source may differ from
-   the repo (verify in the Cloud Functions console).
+   the code falls back to an empty list and loads the file anyway. `make check upload-amazon` shows whether the
+   deployed source still equals the repo.
