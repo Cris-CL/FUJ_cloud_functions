@@ -100,6 +100,7 @@ dtypes_dict = {
     "int64": "INTEGER",
     "float64": "FLOAT",
     "datetime64[ns]": "DATETIME",
+    "datetime64[us]": "DATETIME",  # pandas 2.x dtype of a column set from datetime.now() (UPLOADED_DATETIME)
     "datetime64[ns, UTC]": "DATETIME",
     "datetime64[ns, pytz.FixedOffset(540)]": "DATETIME",  # pandas 1.x name of a fixed +09:00 offset
     "datetime64[ns, UTC+09:00]": "DATETIME",  # pandas 2.x name of the same dtype

@@ -54,6 +54,8 @@ The live CPU (167m) is not the Gen 2 default for 512Mi, so `deploy.sh` passes `-
   Checked by running all 200 archived SG files in `gs://fujiorg-sales-data/Amazon_SG/` through the parsing and the
   BigQuery Arrow conversion on both stacks: identical except an empty `ship_state` that pandas 1.5 stored as the text
   `"None"` and pandas 2 stores as NULL (one file). pandas 2 names the +09:00 timestamp dtype `UTC+09:00`, so
-  `config_asg.dtypes_dict` gained that key (without it, every Order Central file failed with a KeyError).
+  `config_asg.dtypes_dict` gained that key (without it, every Order Central file failed with a KeyError). pandas 2 also
+  gives `UPLOADED_DATETIME` (set from `datetime.now()`) the dtype `datetime64[us]`, mapped to DATETIME as well; the first
+  python312 deploy (revision 00019) lacked that key and would have failed on every file; no file arrived before the fix.
 - Open question: Amazon SG is inactive. Should the function be deleted, or kept for possible reuse?
 - The file is moved before the BigQuery load, so a failed load leaves the file archived but not loaded.
