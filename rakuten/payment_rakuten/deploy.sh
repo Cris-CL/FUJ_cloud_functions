@@ -1,18 +1,21 @@
 #!/usr/bin/env bash
 # Deploys the payment-rakuten Cloud Function (Gen 2) from this folder.
 #
-# Usage:  bash rakuten/payment_rakuten/deploy.sh
-# Check:  gcloud functions describe payment-rakuten --region us-central1 --format=yaml
+# Usage:  make deploy payment-rakuten      (or: bash rakuten/payment_rakuten/deploy.sh)
+# Check:  make check payment-rakuten
 #
 # The values below reproduce the live configuration (project test-bigquery-cc,
 # us-central1, python314, GCS finalize trigger on bucket rakuten_payment_raw).
 set -euo pipefail
+FUNCTION=payment-rakuten
+REGION=us-central1
+PROJECT=test-bigquery-cc
 cd "$(dirname "$0")"
 
-gcloud functions deploy payment-rakuten \
-  --project test-bigquery-cc \
+${GCLOUD:-gcloud} functions deploy "$FUNCTION" \
+  --project "$PROJECT" \
   --gen2 \
-  --region us-central1 \
+  --region "$REGION" \
   --runtime python314 \
   --source . \
   --entry-point update_payment \

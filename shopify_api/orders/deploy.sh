@@ -1,19 +1,22 @@
 #!/usr/bin/env bash
 # Deploys the FUJ_shopify_orders Cloud Function (Gen 2) from this folder.
 #
-# Usage:  bash shopify_api/orders/deploy.sh
-# Check:  gcloud functions describe FUJ_shopify_orders --region us-central1 --format=yaml
+# Usage:  make deploy FUJ_shopify_orders      (or: bash shopify_api/orders/deploy.sh)
+# Check:  make check FUJ_shopify_orders
 #
 # The values below reproduce the live configuration (project test-bigquery-cc, us-central1,
 # python312, Pub/Sub trigger on topic shopify_orders, no retry). It was first deployed from
 # the console; SHOPIFY_KEY / SHOPIFY_PASS come from Secret Manager.
 set -euo pipefail
+FUNCTION=FUJ_shopify_orders
+REGION=us-central1
+PROJECT=test-bigquery-cc
 cd "$(dirname "$0")"
 
-gcloud functions deploy FUJ_shopify_orders \
-  --project test-bigquery-cc \
+${GCLOUD:-gcloud} functions deploy "$FUNCTION" \
+  --project "$PROJECT" \
   --gen2 \
-  --region us-central1 \
+  --region "$REGION" \
   --runtime python312 \
   --source . \
   --entry-point main \

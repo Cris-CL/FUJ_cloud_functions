@@ -13,13 +13,10 @@ def stripe_weekly():
   api_key_local = os.environ.get('stripe_key')
   table_q = os.environ.get('TABLE_QUERY')
   stripe.api_key = api_key_local
-
+  
   ## Query to get last transaction in bq
 
-  query =f"""
-  ---- stripe_weekly query ----
-  SELECT MAX(created_utc) FROM `{table_q}`
-  """
+  query =f"""SELECT max(created_utc) FROM `{table_q}`"""
   client_q = bigquery.Client()
   query_job = client_q.query(query)  # Make an API request.
   rows = query_job.result()
@@ -33,7 +30,7 @@ def stripe_weekly():
   today = datetime.combine(date.today(), time())
   end_time = today - timedelta(days=2,seconds=1)
   end_var = str(int(end_time.timestamp()))
-
+  
   ## Type of report to create
   ## ref: https://stripe.com/docs/reports/report-types
   report_var = "balance_change_from_activity.itemized.2"
@@ -45,7 +42,7 @@ def stripe_weekly():
       'interval_end': end_var,
       'columns': [
         'balance_transaction_id',
-        'created_utc',
+        'created_utc', 
         'currency',
         'gross',
         'fee',

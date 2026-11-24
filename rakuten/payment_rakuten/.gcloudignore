@@ -1,7 +1,11 @@
 .gcloudignore
 .git
 .gitignore
+.env
+*.ipynb
 __pycache__/
 *.pyc
 README.md
 deploy.sh
+# local-only script, not part of the function
+backfill_archive.py

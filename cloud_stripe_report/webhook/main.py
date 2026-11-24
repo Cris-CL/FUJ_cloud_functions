@@ -1,7 +1,6 @@
 import json
 import os
 import stripe
-import threading
 from flask import Flask, jsonify, request
 from process_report import process_report  # Import the function from process_report.py
 
@@ -29,12 +28,11 @@ def webhook(request):
         # Invalid signature
         return jsonify({"error": "Invalid signature"}), 400
 
-    # Immediately return success response
     if event["type"] == "reporting.report_run.succeeded":
-        threading.Thread(
-            target=process_report,
-            args=(event["data"]["object"], bucket_name, api_key_local),
-        ).start()
+        # Runs before the response on purpose: Cloud Run throttles the CPU once the response is
+        # sent, which broke the upload when this ran in a background thread. An exception here
+        # becomes an HTTP 500, so Stripe retries the event.
+        process_report(event["data"]["object"], bucket_name, api_key_local)
 
     elif event["type"] == "payout.paid":
         pay_event = event["data"]["object"]
