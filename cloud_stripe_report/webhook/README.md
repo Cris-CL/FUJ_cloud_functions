@@ -17,8 +17,9 @@ HTTP endpoint that Stripe calls when a report run finishes. It downloads the rep
 
 1. Verifies the `Stripe-Signature` header against the webhook secret (`stripe.Webhook.construct_event`); invalid payload
    or signature -> HTTP 400.
-2. `reporting.report_run.succeeded`: starts a background thread running `process_report.process_report`, and returns
-   `{"success": true}` immediately. The thread downloads the report and uploads it to `STRIPE_BUCKET`:
+2. `reporting.report_run.succeeded`: runs `process_report.process_report`, which downloads the report and uploads it
+   to `STRIPE_BUCKET`, and only then returns `{"success": true}`. If the download or upload fails the function answers
+   HTTP 500 and Stripe retries the event:
    - `payout_reconciliation.itemized.5` -> `PAY_<stripe file name>`
    - `balance_change_from_activity.itemized.2` -> `BAL_<stripe file name>`
 3. `payout.paid`: only logs the arrival date. Any other event type: logged as unhandled.
@@ -50,9 +51,9 @@ make describe stripe-webhook
 
 - Upgraded from python310 (deprecated) to python312 on 2026-11-18 (Flask 2.2 -> 3.1, google-cloud-storage 1.44 -> 3.17,
   stripe pinned to 16.1.0), tested offline with signed test events on both the old and the new stack.
-- The report is processed in a thread after the HTTP response is sent. On Cloud Functions Gen 2 / Cloud Run, CPU may
-  be throttled after the response, so the upload can be slow or lost; a failure there is only visible in the logs
-  (Stripe has already received 200 and does not retry).
+- Until 2026-11-24 the report was processed in a thread after the HTTP response was sent. Cloud Run throttles the CPU
+  after the response, and on 2026-11-22 both uploads failed with `SSLEOFError` while Stripe had already received 200
+  (no retry). The report is now processed before the response.
 - `requirements.txt` now lists `requests` (imported by `process_report.py`, previously only installed via `stripe`) and
   no longer lists `pytz` and `google-cloud-bigquery`, which nothing imports.
 - The older unused payout request code `payout_wh.py` was moved to `old_functions/` on 2026-11-18 (it was never in the
